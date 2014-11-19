@@ -208,20 +208,20 @@ char *charsym(const char value) {
 }
 
 void writeexpr(FILE *stream, atom *expr) {
-  switch(type(expr)) {
-    case type_num: fprintf(stream, "%g", numval(expr)); break;
-    case type_sym: fprintf(stream, "%s", symval(expr)); break;
-    case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
-    case type_char: fprintf(stream, "#\\%s", charsym(expr->c)); break;
-    case type_fn:
-    	fprintf(stream, "#<fn ");
-    	writeexpr(stream, car(expr));
-    	fprintf(stream, ": ");
-    	writeexpr(stream, car(cdr(expr)));
-    	fprintf(stream, ">");
-    	break;
-    case type_builtin: fprintf(stream, "#<builtin %p>", builtin(expr)); break;
-    case type_cons: 
+	switch(type(expr)) {
+		case type_num: fprintf(stream, "%g", numval(expr)); break;
+		case type_sym: fprintf(stream, "%s", symval(expr)); break;
+		case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
+		case type_char: fprintf(stream, "#\\%s", charsym(expr->c)); break;
+		case type_builtin: fprintf(stream, "#<builtin %p>", builtin(expr)); break;
+		case type_fn:
+			fprintf(stream, "#<fn ");
+			writeexpr(stream, car(expr));
+			fprintf(stream, ": ");
+			writeexpr(stream, car(cdr(expr)));
+			fprintf(stream, ">");
+			break;
+		case type_cons: 
 			fprintf(stream, "(");
 			for(;;) {
 				writeexpr(stream, car(expr));
@@ -236,8 +236,8 @@ void writeexpr(FILE *stream, atom *expr) {
 				fprintf(stream, " ");
 			}
 			break;
-    default: error("writeexpr not implemented for this type", nil);
-  }
+		default: error("writeexpr not implemented for this type", nil);
+	}
 }
 
 atom *evlis(atom *exprs, atom *env);
@@ -437,7 +437,7 @@ int main(int argc, char **argv) {
 	init_arc();
 	setinput(stdin);
 	for(;;) {
-		printf("%s", "eval:\n   ");
+		printf("%s", "> ");
 		atom *o = eval(readexpr(), env_root);
 		printf("%s", "=> ");
 		writeexpr(stdout, o);
