@@ -5,7 +5,10 @@
 
 #define error(X, A) do { fprintf(stderr, "%s ", X); return A; } while (0)
 
-typedef enum { type_num, type_sym, type_cons, type_str, type_char, type_fn, type_builtin } atype;
+typedef enum {
+	type_num, type_sym, type_cons, type_str, type_char,
+	type_table, type_tagged, type_fn, type_builtin
+} atype;
 
 typedef struct atom {
 	atype type;
@@ -25,6 +28,8 @@ atom *sym_quote, *sym_if, *sym_while, *sym_fn, *sym_assign;
 #define symval(atom) ((atom)->sym)
 #define car(atom) ((atom)->car)
 #define cdr(atom) ((atom)->cdr)
+#define tag(atom) (car(atom))
+#define rep(atom) (cdr(atom))
 #define builtin(atom) ((atom)->builtin)
 #define no(atom) ((atom) == nil)
 
@@ -62,6 +67,28 @@ atom *mkstr(const char *value) {
 atom *mkchar(const char value) {
 	atom *result = mkatom(type_char);
 	result->c = value;
+	return result;
+}
+
+atom *mktable(atom *entries) {
+	atom *tp, *result = mkatom(type_table);
+	car(result) = cdr(result) = nil;
+	while (!no(entries)) {
+	loop_entries:
+		tp = result;
+		while (!no(tp)) {
+			if (car(car(tp)) == car(entries)) {
+				cdr(car(tp)) = car(cdr(entries));
+				entries = cdr(cdr(entries));
+				if (no(entries)) return result;
+				else goto loop_entries;
+			}
+			tp = cdr(tp);
+		}
+		cdr(result) = cons(car(result), cdr(result));
+		car(result) = cons(car(entries), car(cdr(entries)));
+		entries = cdr(cdr(entries));
+	}
 	return result;
 }
 
@@ -215,6 +242,7 @@ void writeexpr(FILE *stream, atom *expr) {
 		case type_sym: fprintf(stream, "%s", symval(expr)); break;
 		case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
 		case type_char: fprintf(stream, "#\\%s", charsym(expr->c)); break;
+		case type_table: fprintf(stream, "#<table ...>"); break;
 		case type_builtin: fprintf(stream, "#<builtin %p>", builtin(expr)); break;
 		case type_fn:
 			fprintf(stream, "#<fn ");
@@ -251,6 +279,7 @@ atom *eval(atom *exp, atom *env) {
 		case type_builtin:
 		case type_fn:
 		case type_str:
+		case type_table:
 		case type_num: return exp;
 		case type_sym:
 			tmp = assoc(exp, env);
@@ -431,6 +460,7 @@ void init_arc() {
 	sym_assign = intern("assign");
 	env_assign(env_root, intern("is"), mkbuiltin(prim_is));
 	env_assign(env_root, intern("type"), mkbuiltin(prim_type));
+	env_assign(env_root, intern("table"), mkbuiltin(mktable));
 	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
 	env_assign(env_root, intern("+"), mkbuiltin(prim_add));
 	env_assign(env_root, intern("-"), mkbuiltin(prim_sub));
