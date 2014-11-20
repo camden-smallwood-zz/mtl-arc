@@ -156,10 +156,10 @@ char *gettoken() {
 	if(la_valid) { la_valid = 0; return token_la; }
 	do { if((ch = getc(ifp)) == EOF) return NULL; } while(isspace(ch));
 	add_to_buf(ch);
-	if(strchr("()\'\"", ch)) return buf2str();
+	if(strchr("'()\"", ch)) return buf2str();
 	for(;;) {
 		if((ch = getc(ifp)) == EOF) exit(0);
-		if(strchr("()\'\"", ch) || isspace(ch)) {
+		if(strchr("'()\"", ch) || isspace(ch)) {
 			ungetc(ch, ifp);
 			return buf2str();
 		}
@@ -195,6 +195,7 @@ atom *readlist() {
 
 atom *readstr() {
 	char c, cbuf[1024];
+	memset(cbuf, 0, 1024);
 	int n = 0;
 	while ((c = fgetc(ifp)) != '\"') cbuf[n++] = c;
 	return mkstr(cbuf);
@@ -203,6 +204,7 @@ atom *readstr() {
 char *charsym(const char value) {
 	if (value == '\n') return "newline";
 	else if (value == '\t') return "tab";
+	else if (value == ' ') return "space";
 	char cbuf[] = { value, 0 };
 	return strdup(cbuf);
 }
@@ -378,16 +380,12 @@ atom *prim_lt(atom *args) {
 }
 
 atom *prim_pr(atom *args) {
-	for (;;) {
-		if (no(cdr(args))) {
-			if (type(car(args)) == type_str)
-				printf("%s", symval(car(args)));
-			else writeexpr(stdout, car(args));
-			break;
+	while (!no(args)) {
+		switch (type(car(args))) {
+			case type_str: printf("%s", symval(car(args))); break;
+			case type_char: printf("%c", car(args)->c); break;
+			default: writeexpr(stdout, car(args)); break;
 		}
-		if (type(car(args)) == type_str)
-			printf("%s", symval(car(args)));
-		else writeexpr(stdout, car(args));
 		args = cdr(args);
 	}
 	return nil;
