@@ -2,7 +2,11 @@ mtl-arc
 =======
 A new implementation of the Arc language
 
-This is a major work in progress, and will change quite often. The core is a bare-minimum C interpreter designed for building Arc on top of. It currently consists of less than 450 lines of code. There is currently no garbage collection; I'm looking over what I consider 'options'.
+This is a major work in progress, and will change quite often. 
+The core is a bare-minimum C interpreter designed for building Arc on top of. 
+It currently consists of just over 450 lines of code. 
+My goal is to maintain the simplicity, readability and speed of the core, while defining as much of Arc in Arc itself as possible (like macros). 
+There is currently no garbage collection; I'm looking over what I consider 'options'.
 
 Features:
 =========
