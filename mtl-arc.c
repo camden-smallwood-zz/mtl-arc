@@ -343,6 +343,19 @@ atom *prim_is(atom *args) {
 	return t;
 }
 
+atom *prim_type(atom *args) {
+	switch (type(car(args))) {
+		case type_num: return intern("num");
+		case type_sym: return intern("sym");
+		case type_cons: return intern("cons");
+		case type_str: return intern("str");
+		case type_char: return intern("char");
+		case type_fn: return intern("fn");
+		case type_builtin: return intern("builtin");
+	}
+	error("Unknown type of atom", car(args));
+}
+
 atom *prim_add(atom *args) {
 	double sum;
 	for(sum = 0; !no(args); sum += numval(car(args)), args = cdr(args));
@@ -417,6 +430,7 @@ void init_arc() {
 	sym_fn = intern("fn");
 	sym_assign = intern("assign");
 	env_assign(env_root, intern("is"), mkbuiltin(prim_is));
+	env_assign(env_root, intern("type"), mkbuiltin(prim_type));
 	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
 	env_assign(env_root, intern("+"), mkbuiltin(prim_add));
 	env_assign(env_root, intern("-"), mkbuiltin(prim_sub));
@@ -430,8 +444,7 @@ void init_arc() {
 }
 
 int main(int argc, char **argv) {
-	puts("  mtl-arc v0.1");
-	puts("================");
+	puts("  mtl-arc v0.1\n================");
 	init_arc();
 	setinput(stdin);
 	for(;;) {
