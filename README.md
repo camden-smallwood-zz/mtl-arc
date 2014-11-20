@@ -16,8 +16,8 @@ Special Forms:
 
 Builtin Functions:
 ==================
-```is, +, -, *, /, pr, cons, car, cdr```
+```is, type, +, -, *, /, pr, cons, car, cdr```
 
 Defined Functions:
 ==================
-```list```
+``` list, ```
