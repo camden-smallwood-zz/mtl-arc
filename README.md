@@ -18,11 +18,11 @@ Features:
 
 Special Forms:
 ==============
-```assign, if, while, fn```
+```quote, assign, if, while, fn```
 
 Builtin Functions:
 ==================
-```is, type, +, -, *, /, pr, cons, car, cdr```
+```is, type, table, annotate, +, -, *, /, pr, cons, car, cdr```
 
 Defined Functions:
 ==================
