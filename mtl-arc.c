@@ -70,6 +70,28 @@ atom *mkchar(const char value) {
 	return result;
 }
 
+atom *tget(atom *args) { // args => table, key
+	atom *table = car(args), *key = car(cdr(args));
+	while (!no(table)) {
+		if (car(car(table)) == key) return cdr(car(table));
+		table = cdr(table);
+	}
+	return nil;
+}
+
+atom *tset(atom *args) { // args => table, key, value
+	atom *table = car(args), *tp = table,
+	     *key = car(cdr(args)), *value = car(cdr(cdr(args)));
+	while (!no(tp)) {
+		if (car(car(tp)) == key) return cdr(car(tp)) = value;
+		tp = cdr(tp);
+	}
+	if (car(table) != nil)
+		cdr(table) = cons(car(table), cdr(table));
+	car(table) = cons(key, value);
+	return value;
+}
+
 atom *mktable(atom *entries) {
 	atom *tp, *result = mkatom(type_table);
 	car(result) = cdr(result) = nil;
@@ -85,7 +107,8 @@ atom *mktable(atom *entries) {
 			}
 			tp = cdr(tp);
 		}
-		cdr(result) = cons(car(result), cdr(result));
+		if (car(result) != nil)
+			cdr(result) = cons(car(result), cdr(result));
 		car(result) = cons(car(entries), car(cdr(entries)));
 		entries = cdr(cdr(entries));
 	}
@@ -242,8 +265,14 @@ void writeexpr(FILE *stream, atom *expr) {
 		case type_sym: fprintf(stream, "%s", symval(expr)); break;
 		case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
 		case type_char: fprintf(stream, "#\\%s", charsym(expr->c)); break;
-		case type_table: fprintf(stream, "#<table ...>"); break;
 		case type_builtin: fprintf(stream, "#<builtin %p>", builtin(expr)); break;
+		case type_table: {
+			fprintf(stream, "#table");
+			expr->type = type_cons;
+			writeexpr(stream, expr);
+			expr->type = type_table;
+			break;
+		}
 		case type_fn:
 			fprintf(stream, "#<fn ");
 			writeexpr(stream, car(expr));
@@ -313,7 +342,16 @@ atom *eval(atom *exp, atom *env) {
 			} else if (op == sym_assign) {
 				if (type(car(args)) == type_sym)
 					return env_assign_eq(env, car(args), eval(car(cdr(args)), env));
-				error("Cannot assign value to non-sym", car(args));
+				else if (type(car(args)) == type_cons) {
+					atom *iop = eval(car(car(args)), env);
+					if (type(iop) == type_table)
+						return tset(cons(iop, cons(eval(car(cdr(car(args))), env), cons(eval(car(cdr(args)), env), nil))));
+					else if (is(car(car(args)), intern("car")))
+						return car(eval(car(cdr(car(args))), env)) = eval(car(cdr(args)), env);
+					else if (is(car(car(args)), intern("cdr")))
+						return cdr(eval(car(cdr(car(args))), env)) = eval(car(cdr(args)), env);
+				}
+				error("Cannot assign value", car(args));
 			}
 			return apply(eval(op, env), evlis(args, env), env);
 		}
@@ -344,6 +382,8 @@ atom *apply(atom *fn, atom *args, atom *env) {
 		return progn(car(cdr(fn)), cdr(cdr(fn)));
 	} else if (type(fn) == type_str) {
 		return mkchar(symval(fn)[(int)numval(car(args))]);
+	} else if (type(fn) == type_table) {
+		return tget(cons(fn, cons(car(args), nil)));
 	}
 	error("Bad argument to apply", fn);
 }
@@ -461,6 +501,7 @@ void init_arc() {
 	env_assign(env_root, intern("is"), mkbuiltin(prim_is));
 	env_assign(env_root, intern("type"), mkbuiltin(prim_type));
 	env_assign(env_root, intern("table"), mkbuiltin(mktable));
+	env_assign(env_root, intern("tset"), mkbuiltin(tset));
 	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
 	env_assign(env_root, intern("+"), mkbuiltin(prim_add));
 	env_assign(env_root, intern("-"), mkbuiltin(prim_sub));
