@@ -14,7 +14,7 @@ typedef struct atom {
 	atype type;
 	union {
 		double num;
-		char *sym, c;
+		char *sym;
 		struct { struct atom *car, *cdr; };
 		struct atom *(*builtin)(struct atom *);
 	};
@@ -26,6 +26,7 @@ atom *sym_quote, *sym_if, *sym_while, *sym_fn, *sym_assign;
 #define type(atom) ((atom)->type)
 #define numval(atom) ((atom)->num)
 #define symval(atom) ((atom)->sym)
+#define charval(atom) ((atom)->sym[0])
 #define car(atom) ((atom)->car)
 #define cdr(atom) ((atom)->cdr)
 #define tag(atom) (car(atom))
@@ -58,6 +59,20 @@ atom *mksym(const char *value) {
 	return result;
 }
 
+atom *findsym(const char *name) {
+	for(atom *symlist = symbol_root; !no(symlist); symlist = cdr(symlist))
+		if(!strcmp(name, symval(car(symlist)))) return symlist;
+	return nil;
+}
+
+atom *intern(const char *name) {
+	atom *p = findsym(name);
+	if(!no(p)) return car(p);
+	p = mksym(name);
+	symbol_root = cons(p, symbol_root);
+	return p;
+}
+
 atom *mkstr(const char *value) {
 	atom *result = mkatom(type_str);
 	symval(result) = strdup(value);
@@ -66,7 +81,8 @@ atom *mkstr(const char *value) {
 
 atom *mkchar(const char value) {
 	atom *result = mkatom(type_char);
-	result->c = value;
+	result->sym = (char *)malloc(sizeof(char));
+	charval(result) = value;
 	return result;
 }
 
@@ -92,7 +108,7 @@ atom *tset(atom *args) { // args => table, key, value
 	return value;
 }
 
-atom *mktable(atom *entries) {
+atom *table(atom *entries) {
 	atom *tp, *result = mkatom(type_table);
 	car(result) = cdr(result) = nil;
 	while (!no(entries)) {
@@ -115,6 +131,13 @@ atom *mktable(atom *entries) {
 	return result;
 }
 
+atom *annotate(atom *args) {
+	atom *result = mkatom(type_tagged);
+	tag(result) = car(args);
+	rep(result) = car(cdr(args));
+	return result;
+}
+
 atom *mkbuiltin(atom *(*function)(atom *)) {
 	atom *result = mkatom(type_builtin);
 	builtin(result) = function;
@@ -126,20 +149,6 @@ atom *mkfn(atom *args, atom *body, atom *env) {
 	car(result) = args;
 	cdr(result) = cons(body, env);
 	return result;
-}
-
-atom *findsym(const char *name) {
-	for(atom *symlist = symbol_root; !no(symlist); symlist = cdr(symlist))
-		if(!strcmp(name, symval(car(symlist)))) return symlist;
-	return nil;
-}
-
-atom *intern(const char *name) {
-	atom *p = findsym(name);
-	if(!no(p)) return car(p);
-	p = mksym(name);
-	symbol_root = cons(p, symbol_root);
-	return p;
 }
 
 atom *env_create(atom *parent) { return cons(parent, nil); }
@@ -225,7 +234,10 @@ atom *readexpr() {
 	if(!strcmp(token, "(")) return readlist();
 	if(!strcmp(token, "\"")) return readstr();
 	if(!strcmp(token, "\'")) return cons(sym_quote, cons(readexpr(), nil));
-	if(token[strspn(token, "0123456789.-")] == '\0') return mknum((double)atof(token));
+	if(token[strspn(token, "0123456789.-")] == '\0') {
+		if (!strcmp(token, ".") || !strcmp(token, "-")) return intern(token);
+		return mknum((double)atof(token));
+	}
 	return intern(token);
 }
 
@@ -235,7 +247,7 @@ atom *readlist() {
 	if(!strcmp(token, ")")) return nil;
 	if(!strcmp(token, ".")) {
 		tmp = readexpr();
-		if(strcmp(gettoken(), ")")) error("Invalid syntax", tmp);
+		if(strcmp(gettoken(), ")")) error("invalid syntax", tmp);
 		return tmp;
 	}
 	putback_token(token);
@@ -251,7 +263,7 @@ atom *readstr() {
 	return mkstr(cbuf);
 }
 
-char *charsym(const char value) {
+char *charstr(const char value) {
 	if (value == '\n') return "newline";
 	else if (value == '\t') return "tab";
 	else if (value == ' ') return "space";
@@ -264,15 +276,19 @@ void writeexpr(FILE *stream, atom *expr) {
 		case type_num: fprintf(stream, "%g", numval(expr)); break;
 		case type_sym: fprintf(stream, "%s", symval(expr)); break;
 		case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
-		case type_char: fprintf(stream, "#\\%s", charsym(expr->c)); break;
-		case type_builtin: fprintf(stream, "#<builtin %p>", builtin(expr)); break;
-		case type_table: {
+		case type_char: fprintf(stream, "#\\%s", charstr(charval(expr))); break;
+		case type_builtin: fprintf(stream, "#<builtin:%p>", builtin(expr)); break;
+		case type_tagged:
+			fprintf(stream, "#<tagged %s ", symval(tag(expr)));
+			writeexpr(stream, rep(expr));
+			putchar('>');
+			break;
+		case type_table:
 			fprintf(stream, "#table");
 			expr->type = type_cons;
 			writeexpr(stream, expr);
 			expr->type = type_table;
 			break;
-		}
 		case type_fn:
 			fprintf(stream, "#<fn ");
 			writeexpr(stream, car(expr));
@@ -312,7 +328,7 @@ atom *eval(atom *exp, atom *env) {
 		case type_num: return exp;
 		case type_sym:
 			tmp = assoc(exp, env);
-			if(tmp == nil) error("Unbound symbol", exp);
+			if(tmp == nil) error("unbound symbol", exp);
 			return cdr(tmp);
 		case type_cons: {
 			atom *op = car(exp), *args = cdr(exp);
@@ -339,7 +355,7 @@ atom *eval(atom *exp, atom *env) {
 				return mkfn(car(args), cdr(args), env);
 			} else if (op == sym_quote) {
 				return car(args);
-			} else if (op == sym_assign) {
+			} else if (op == sym_assign || op == intern("=")) {
 				if (type(car(args)) == type_sym)
 					return env_assign_eq(env, car(args), eval(car(cdr(args)), env));
 				else if (type(car(args)) == type_cons) {
@@ -351,7 +367,7 @@ atom *eval(atom *exp, atom *env) {
 					else if (is(car(car(args)), intern("cdr")))
 						return cdr(eval(car(cdr(car(args))), env)) = eval(car(cdr(args)), env);
 				}
-				error("Cannot assign value", car(args));
+				error("cannot assign value", car(args));
 			}
 			return apply(eval(op, env), evlis(args, env), env);
 		}
@@ -374,18 +390,18 @@ atom *progn(atom *exprs, atom *env) {
 }
 
 atom *apply(atom *fn, atom *args, atom *env) {
-	if (type(fn) == type_builtin) return (*builtin(fn))(args);
-	else if (type(fn) == type_fn) {
-		if (type(car(fn)) == type_sym)
-			env_assign(cdr(cdr(fn)), car(fn), args);
-		else env_assign_multiple(cdr(cdr(fn)), car(fn), args);
-		return progn(car(cdr(fn)), cdr(cdr(fn)));
-	} else if (type(fn) == type_str) {
-		return mkchar(symval(fn)[(int)numval(car(args))]);
-	} else if (type(fn) == type_table) {
-		return tget(cons(fn, cons(car(args), nil)));
+	switch (type(fn)) {
+		case type_builtin: return (*builtin(fn))(args);
+		case type_tagged: return apply(rep(fn), args, env);
+		case type_str: return mkchar(symval(fn)[(int)numval(car(args))]);
+		case type_table: return tget(cons(fn, cons(car(args), nil)));
+		case type_fn:
+			if (type(car(fn)) == type_sym)
+				env_assign(cdr(cdr(fn)), car(fn), args);
+			else env_assign_multiple(cdr(cdr(fn)), car(fn), args);
+			return progn(car(cdr(fn)), cdr(cdr(fn)));
+		default: error("bad argument to apply", fn);
 	}
-	error("Bad argument to apply", fn);
 }
 
 int is(atom *a, atom *b) {
@@ -393,8 +409,12 @@ int is(atom *a, atom *b) {
 		switch (type(a)) {
 			case type_cons:
 			case type_fn:
+			case type_table:
+			case type_tagged:
 				return is(car(a), car(b)) && is(cdr(a), cdr(b));
 			case type_sym: return a == b;
+			case type_str: return !strcmp(symval(a), symval(b));
+			case type_char: return charval(a) == charval(b);
 			case type_num: return numval(a) == numval(b);
 			case type_builtin: return builtin(a) == builtin(b);
 		}
@@ -419,10 +439,12 @@ atom *prim_type(atom *args) {
 		case type_cons: return intern("cons");
 		case type_str: return intern("str");
 		case type_char: return intern("char");
+		case type_table: return intern("table");
+		case type_tagged: return tag(car(args));
 		case type_fn: return intern("fn");
 		case type_builtin: return intern("builtin");
 	}
-	error("Unknown type of atom", car(args));
+	error("unknown type of atom", car(args));
 }
 
 atom *prim_add(atom *args) {
@@ -465,7 +487,7 @@ atom *prim_pr(atom *args) {
 	while (!no(args)) {
 		switch (type(car(args))) {
 			case type_str: printf("%s", symval(car(args))); break;
-			case type_char: printf("%c", car(args)->c); break;
+			case type_char: printf("%c", charval(car(args))); break;
 			default: writeexpr(stdout, car(args)); break;
 		}
 		args = cdr(args);
@@ -500,7 +522,8 @@ void init_arc() {
 	sym_assign = intern("assign");
 	env_assign(env_root, intern("is"), mkbuiltin(prim_is));
 	env_assign(env_root, intern("type"), mkbuiltin(prim_type));
-	env_assign(env_root, intern("table"), mkbuiltin(mktable));
+	env_assign(env_root, intern("table"), mkbuiltin(table));
+	env_assign(env_root, intern("annotate"), mkbuiltin(annotate));
 	env_assign(env_root, intern("tset"), mkbuiltin(tset));
 	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
 	env_assign(env_root, intern("+"), mkbuiltin(prim_add));
