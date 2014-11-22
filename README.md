@@ -10,20 +10,23 @@ There is currently no garbage collection; I'm looking over what I consider 'opti
 
 Features:
 =========
-* Double-precision floating-point numbers, strings, characters, tables...
+* Double-precision floating-point numbers, strings, characters, tables, exceptions, streams
 * Implicit string indexing
 * Implicit table referencing
 * Builtin "place" assignments (table & conses)
-* TBD...
 
 Special Forms:
 ==============
 ```quote, quasiquote, unquote, unquote-expand, assign, if, while, fn```
 
+Builtin Variables:
+==================
+```stdin, stdout, stderr```
+
 Builtin Functions:
 ==================
-```is, type, table, annotate, +, -, *, /, <, pr, cons, car, cdr```
+```is, type, table, annotate, err, +, -, *, /, <, pr, cons, car, cdr```
 
 Defined Functions:
 ==================
-``` list, ```
+```list, prn```
