@@ -548,12 +548,28 @@ atom *prim_err(atom *args) {
 }
 
 atom *prim_add(atom *args) {
+	if (!no(args)) {
+		atom *p = args;
+		while (!no(p)) {
+			if (type(car(p)) != type_num)
+				return error("invalid argument supplied to '+'", car(p));
+			p = cdr(p);
+		}
+	}
 	double sum;
 	for(sum = 0; !no(args); sum += numval(car(args)), args = cdr(args));
 	return new_num(sum);
 }
 
 atom *prim_sub(atom *args) {
+	if (!no(args)) {
+		atom *p = args;
+		while (!no(p)) {
+			if (type(car(p)) != type_num)
+				return error("invalid argument supplied to '-'", car(p));
+			p = cdr(p);
+		}
+	}
 	double sum;
 	for(sum = numval(car(args)), args = cdr(args); 
 	    !no(args); 
@@ -562,12 +578,28 @@ atom *prim_sub(atom *args) {
 }
 
 atom *prim_mul(atom *args) {
+	if (!no(args)) {
+		atom *p = args;
+		while (!no(p)) {
+			if (type(car(p)) != type_num)
+				return error("invalid argument supplied to '*'", car(p));
+			p = cdr(p);
+		}
+	}
 	double prod;
 	for(prod = 1; !no(args); prod *= numval(car(args)), args = cdr(args));
 	return new_num(prod);
 }
 
 atom *prim_div(atom *args) {
+	if (!no(args)) {
+		atom *p = args;
+		while (!no(p)) {
+			if (type(car(p)) != type_num)
+				return error("invalid argument supplied to '/'", car(p));
+			p = cdr(p);
+		}
+	}
 	double rem;
 	for (rem = numval(car(args)), args = cdr(args);
 	     !no(args);
@@ -576,9 +608,11 @@ atom *prim_div(atom *args) {
 }
 
 atom *prim_lt(atom *args) {
-	atom *a, *b;
-	if (no(args) || no(cdr(args)) || !no(cdr(cdr(args))))
+	if ((no(args) || no(cdr(args)) || !no(cdr(cdr(args)))) ||
+	    type(car(args)) != type_num ||
+	    type(car(cdr(args))) != type_num)
 		return error("invalid arguments supplied to '<'", args);
+	atom *a, *b;
 	if (type(a = car(args)) == type_num &&
 	    type(b = car(cdr(args))) == type_num)
 		return numval(a) < numval(b) ? t : nil;
@@ -597,9 +631,25 @@ atom *prim_pr(atom *args) {
 	return nil;
 }
 
-atom *prim_cons(atom *args) { return cons(car(args), car(cdr(args))); }
-atom *prim_car(atom *args)  { return car(car(args)); }
-atom *prim_cdr(atom *args)  { return cdr(car(args)); }
+atom *prim_cons(atom *args) {
+	if (no(args) || no(cdr(args)) || !no(cdr(cdr(args))))
+		return error("invalid arguments supplied to 'cons'", args);
+	return cons(car(args), car(cdr(args)));
+}
+
+atom *prim_car(atom *args) {
+	if (no(args) || !no(cdr(args)))
+		return error("invalid arguments supplied to 'car'", args);
+	if (is(nil, car(args))) return nil;
+	return car(car(args));
+}
+
+atom *prim_cdr(atom *args) {
+	if (no(args) || !no(cdr(args)))
+		return error("invalid arguments supplied to 'car'", args);
+	if (is(nil, car(args))) return nil;
+	return car(car(args));
+}
 
 atom *arc_load_file(const char *path) {
 	printf("loading \"%s\"...\n", path);
