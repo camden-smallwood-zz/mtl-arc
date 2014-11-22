@@ -26,6 +26,7 @@ typedef struct atom {
 
 atom *nil, *t,
      *symbol_root, *env_root,
+     *sym_eval, *sym_apply,
      *sym_quote, *sym_quasiquote, *sym_unquote, *sym_unquote_expand,
      *sym_if, *sym_while, *sym_fn, *sym_assign;
 
@@ -409,7 +410,15 @@ atom *eval(atom *exp, atom *env) {
 			return cdr(tmp);
 		case type_cons: {
 			atom *op = car(exp), *args = cdr(exp);
-			if (op == sym_if) {
+			if (op == sym_eval) {
+				if (!no(cdr(args))) return error("invalid arguments supplied to 'eval'", args);
+				return eval(eval(car(args), env), env);
+			} else if (op == sym_apply) {
+				if (no(args)) return error("invalid arguments supplied to 'apply'", args);
+				if (iserr(op = eval(car(args), env))) return op;
+				if (iserr(args = evlis(cdr(args), env))) return args;
+				return apply(eval(op, env), args, env);
+			} else if (op == sym_if) {
 				atom *cond;
 				while (!no(args)) {
 					if (iserr(cond = eval(car(args), env))) return cond;
@@ -470,7 +479,7 @@ atom *eval(atom *exp, atom *env) {
 }
 
 atom *evlis(atom *exprs, atom *env) {
-	if(exprs == nil) return nil;
+	if (type(exprs) != type_cons) return eval(exprs, env);
 	atom *car, *cdr;
 	if (iserr(car = eval(car(exprs), env))) return car;
 	if (iserr(cdr = evlis(cdr(exprs), env))) return cdr;
@@ -608,6 +617,8 @@ void arc_init() {
 	symbol_root = cons(nil, nil);
 	env_root = env_create(nil);
 	env_assign(env_root, t = intern("t"), t);
+	sym_eval = intern("eval");
+	sym_apply = intern("apply");
 	sym_quote = intern("quote");
 	sym_quasiquote = intern("quasiquote");
 	sym_unquote = intern("unquote");
