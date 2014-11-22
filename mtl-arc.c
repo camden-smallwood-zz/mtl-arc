@@ -329,7 +329,8 @@ char *charstr(const char value) {
 	if (value == '\n') return "#\\newline";
 	else if (value == '\t') return "#\\tab";
 	else if (value == ' ') return "#\\space";
-	char cbuf[] = { value, 0 };
+	char cbuf[] = { 0, 0, 0 };
+	sprintf(cbuf, "#\\%c", value);
 	return strdup(cbuf);
 }
 
