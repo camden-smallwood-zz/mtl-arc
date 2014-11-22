@@ -255,10 +255,10 @@ char *read_token() {
 	if(la_valid) { la_valid = 0; return token_la; }
 	do { if((ch = getc(ifp)) == EOF) return NULL; } while(isspace(ch));
 	add_to_buf(ch);
-	if(strchr("()\"`',@", ch)) return buf_str();
+	if(strchr("()\"`',@;", ch)) return buf_str();
 	for(;;) {
 		if((ch = getc(ifp)) == EOF) exit(0);
-		if(strchr("()\"`',@", ch) || isspace(ch)) {
+		if(strchr("()\"`',@;", ch) || isspace(ch)) {
 			ungetc(ch, ifp);
 			return buf_str();
 		}
@@ -275,12 +275,14 @@ char strchar(const char *str) {
 
 atom *read_list();
 atom *read_str();
+void read_eol_comment();
 atom *read_expr() {
 	char *token = read_token();
 	if (token == NULL) return nil;
 	if (!strcmp(token, "(")) return read_list();
 	if (!strcmp(token, "\"")) return read_str();
 	if (!strcmp(token, "'")) return cons(sym_quote, cons(read_expr(), nil));
+	if (!strcmp(token, ";")) { read_eol_comment(); return read_expr(); }
 	if (!strcmp(token, "`")) return cons(sym_quasiquote, cons(read_expr(), nil));
 	if (!strcmp(token, ",")) {
 		char c = getc(ifp);
@@ -313,16 +315,20 @@ atom *read_list() {
 
 atom *read_str() {
 	char c, cbuf[1024];
-	memset(cbuf, 0, 1024);
 	int n = 0;
+	memset(cbuf, 0, 1024);
 	while ((c = fgetc(ifp)) != '\"') cbuf[n++] = c;
 	return new_str(cbuf);
 }
 
+void read_eol_comment() {
+	while (fgetc(ifp) != '\n');
+}
+
 char *charstr(const char value) {
-	if (value == '\n') return "newline";
-	else if (value == '\t') return "tab";
-	else if (value == ' ') return "space";
+	if (value == '\n') return "#\\newline";
+	else if (value == '\t') return "#\\tab";
+	else if (value == ' ') return "#\\space";
 	char cbuf[] = { value, 0 };
 	return strdup(cbuf);
 }
@@ -334,7 +340,7 @@ void write_expr(FILE *stream, atom *expr) {
 		case type_num: fprintf(stream, "%g", numval(expr)); break;
 		case type_sym: fprintf(stream, "%s", symval(expr)); break;
 		case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
-		case type_char: fprintf(stream, "#\\%s", charstr(charval(expr))); break;
+		case type_char: fprintf(stream, "%s", charstr(charval(expr))); break;
 		case type_builtin: fprintf(stream, "#<builtin:%p>", builtin(expr)); break;
 		case type_stream: fprintf(stream, "#<stream:%p>", stream(expr)); break;
 		case type_fn:
