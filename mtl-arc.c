@@ -228,6 +228,13 @@ char *gettoken() {
 	}
 }
 
+char strchar(const char *str) {
+	if (!strcmp(str, "#\\newline")) return '\n';
+	if (!strcmp(str, "#\\tab")) return '\t';
+	if (!strcmp(str, "#\\space")) return ' ';
+	return str[2];
+}
+
 atom *readlist();
 atom *readstr();
 atom *readexpr() {
@@ -245,6 +252,9 @@ atom *readexpr() {
 	} else if (token[strspn(token, "0123456789.-")] == '\0') {
 		if (!strcmp(token, ".") || !strcmp(token, "-")) return intern(token);
 		return mknum((double)atof(token));
+	} else if (strlen(token) > 2) { // possible reader macro
+		if (token[0] == '#' && token[1] == '\\') // char
+			return mkchar(strchar(token));
 	}
 	return intern(token);
 }
