@@ -20,8 +20,10 @@ typedef struct atom {
 	};
 } atom;
 
-atom *symbol_root, *env_root, *nil, *t;
-atom *sym_quote, *sym_if, *sym_while, *sym_fn, *sym_assign;
+atom *nil, *t,
+     *symbol_root, *env_root,
+     *sym_quote, *sym_quasiquote, *sym_unquote, *sym_unquote_expand,
+     *sym_if, *sym_while, *sym_fn, *sym_assign;
 
 #define type(atom) ((atom)->type)
 #define numval(atom) ((atom)->num)
@@ -159,7 +161,7 @@ atom *env_get(atom *env, atom *sym) {
 		if (car(car(bs)) == sym) return cdr(car(bs));
 		bs = cdr(bs);
 	}
-	if (no(parent)) error("Symbol not bound", sym);
+	if (no(parent)) error("unbound symbol", sym);
 	return env_get(parent, sym);
 }
 
@@ -215,10 +217,10 @@ char *gettoken() {
 	if(la_valid) { la_valid = 0; return token_la; }
 	do { if((ch = getc(ifp)) == EOF) return NULL; } while(isspace(ch));
 	add_to_buf(ch);
-	if(strchr("'()\"", ch)) return buf2str();
+	if(strchr("()\"`',@", ch)) return buf2str();
 	for(;;) {
 		if((ch = getc(ifp)) == EOF) exit(0);
-		if(strchr("'()\"", ch) || isspace(ch)) {
+		if(strchr("()\"`',@", ch) || isspace(ch)) {
 			ungetc(ch, ifp);
 			return buf2str();
 		}
@@ -231,10 +233,16 @@ atom *readstr();
 atom *readexpr() {
 	char *token = gettoken();
 	if (token == NULL) return nil;
-	if(!strcmp(token, "(")) return readlist();
-	if(!strcmp(token, "\"")) return readstr();
-	if(!strcmp(token, "\'")) return cons(sym_quote, cons(readexpr(), nil));
-	if(token[strspn(token, "0123456789.-")] == '\0') {
+	if (!strcmp(token, "(")) return readlist();
+	if (!strcmp(token, "\"")) return readstr();
+	if (!strcmp(token, "'")) return cons(sym_quote, cons(readexpr(), nil));
+	if (!strcmp(token, "`")) return cons(sym_quasiquote, cons(readexpr(), nil));
+	if (!strcmp(token, ",")) {
+		char c = getc(ifp);
+		if (c == '@') return cons(sym_unquote_expand, cons(readexpr(), nil));
+		ungetc(c, ifp);
+		return cons(sym_unquote, cons(readexpr(), nil));
+	} else if (token[strspn(token, "0123456789.-")] == '\0') {
 		if (!strcmp(token, ".") || !strcmp(token, "-")) return intern(token);
 		return mknum((double)atof(token));
 	}
@@ -500,7 +508,7 @@ atom *prim_car(atom *args)  { return car(car(args)); }
 atom *prim_cdr(atom *args)  { return cdr(car(args)); }
 
 atom *load_arc_file(const char *path) {
-	printf("Loading \"%s\"", path);
+	printf("loading \"%s\"", path);
 	setinput(fopen(path, "r+"));
 	atom *expr = nil, *prev = nil;
 	while (prev = expr, !no(expr = eval(readexpr(), env_root))) putchar('.');
@@ -516,6 +524,9 @@ void init_arc() {
 	env_root = env_create(nil);
 	env_assign(env_root, t = intern("t"), t);
 	sym_quote = intern("quote");
+	sym_quasiquote = intern("quasiquote");
+	sym_unquote = intern("unquote");
+	sym_unquote_expand = intern("unquote-expand");
 	sym_if = intern("if");
 	sym_while = intern("while");
 	sym_fn = intern("fn");
@@ -525,11 +536,11 @@ void init_arc() {
 	env_assign(env_root, intern("table"), mkbuiltin(table));
 	env_assign(env_root, intern("annotate"), mkbuiltin(annotate));
 	env_assign(env_root, intern("tset"), mkbuiltin(tset));
-	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
 	env_assign(env_root, intern("+"), mkbuiltin(prim_add));
 	env_assign(env_root, intern("-"), mkbuiltin(prim_sub));
 	env_assign(env_root, intern("*"), mkbuiltin(prim_mul));
 	env_assign(env_root, intern("/"), mkbuiltin(prim_div));
+	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
 	env_assign(env_root, intern("pr"), mkbuiltin(prim_pr));
 	env_assign(env_root, intern("cons"), mkbuiltin(prim_cons));
 	env_assign(env_root, intern("car"), mkbuiltin(prim_car));
