@@ -10,7 +10,7 @@
 typedef enum {
 	type_num, type_sym, type_str, type_char,
 	type_cons, type_fn, type_table, type_tagged, type_exception,
-	type_builtin
+	type_builtin, type_stream
 } atomtype;
 
 typedef struct atom {
@@ -20,6 +20,7 @@ typedef struct atom {
 		char *sym;
 		struct { struct atom *car, *cdr; };
 		struct atom *(*builtin)(struct atom *);
+		FILE *stream;
 	};
 } atom;
 
@@ -37,70 +38,79 @@ atom *nil, *t,
 #define tag(atom) (car(atom))
 #define rep(atom) (cdr(atom))
 #define builtin(atom) ((atom)->builtin)
+#define stream(atom) ((atom)->stream)
 #define exctx(atom) (car(atom))
 #define exmsg(atom) (cdr(atom))
 #define iserr(atom) (type(atom) == type_exception)
 #define no(atom) (((atom) == nil) || (type(atom) == type_exception))
 
-atom *mkatom(atomtype type) {
+atom *new_atom(atomtype type) {
 	atom *result = (atom *)malloc(sizeof(atom));
 	type(result) = type;
 	return result;
 }
 
-atom *mknum(const double value) {
-	atom *result = mkatom(type_num);
+atom *new_num(const double value) {
+	atom *result = new_atom(type_num);
 	numval(result) = value;
 	return result;
 }
 
-atom *mksym(const char *value) {
-	atom *result = mkatom(type_sym);
+atom *new_sym(const char *value) {
+	atom *result = new_atom(type_sym);
 	symval(result) = strdup(value);
 	return result;
 }
 
-atom *mkstr(const char *value) {
-	atom *result = mkatom(type_str);
+atom *new_str(const char *value) {
+	atom *result = new_atom(type_str);
 	symval(result) = strdup(value);
 	return result;
 }
 
-atom *mkchar(const char value) {
-	atom *result = mkatom(type_char);
+atom *new_char(const char value) {
+	atom *result = new_atom(type_char);
 	result->sym = (char *)malloc(sizeof(char));
 	charval(result) = value;
 	return result;
 }
 
 atom *cons(atom *car, atom *cdr) {
-	atom *result = mkatom(type_cons);
+	atom *result = new_atom(type_cons);
 	car(result) = car;
 	cdr(result) = cdr;
 	return result;
 }
 
+atom *new_fn(atom *args, atom *body, atom *env) {
+	atom *result = new_atom(type_fn);
+	car(result) = args;
+	cdr(result) = cons(body, env);
+	return result;
+}
+
 atom *error(const char *message, atom *context) {
-	atom *result = mkatom(type_exception);
+	atom *result = new_atom(type_exception);
 	exctx(result) = context;
-	exmsg(result) = mkstr(strdup(message));
+	exmsg(result) = new_str(strdup(message));
 	return result;
 }
 
 int is(atom *a, atom *b) {
 	if (type(a) == type(b))
 		switch (type(a)) {
+			case type_num: return numval(a) == numval(b);
+			case type_sym: return a == b;
+			case type_str: return !strcmp(symval(a), symval(b));
+			case type_char: return charval(a) == charval(b);
+			case type_builtin: return builtin(a) == builtin(b);
+			case type_stream: return stream(a) == stream(b);
 			case type_cons:
 			case type_fn:
 			case type_table:
 			case type_tagged:
 			case type_exception:
 				return is(car(a), car(b)) && is(cdr(a), cdr(b));
-			case type_sym: return a == b;
-			case type_str: return !strcmp(symval(a), symval(b));
-			case type_char: return charval(a) == charval(b);
-			case type_num: return numval(a) == numval(b);
-			case type_builtin: return builtin(a) == builtin(b);
 		}
 	return 0;
 }
@@ -114,12 +124,12 @@ atom *findsym(const char *name) {
 atom *intern(const char *name) {
 	atom *p = findsym(name);
 	if(!no(p)) return car(p);
-	p = mksym(name);
+	p = new_sym(name);
 	symbol_root = cons(p, symbol_root);
 	return p;
 }
 
-atom *tget(atom *table, atom *key) { // args => table, key
+atom *tget(atom *table, atom *key) {
 	while (!no(table)) {
 		if (car(car(table)) == key) return cdr(car(table));
 		table = cdr(table);
@@ -127,7 +137,7 @@ atom *tget(atom *table, atom *key) { // args => table, key
 	return nil;
 }
 
-atom *tset(atom *table, atom *key, atom *value) { // args => table, key, value
+atom *tset(atom *table, atom *key, atom *value) {
 	atom *tp = table;
 	while (!no(tp)) {
 		if (car(car(tp)) == key) return cdr(car(tp)) = value;
@@ -140,7 +150,7 @@ atom *tset(atom *table, atom *key, atom *value) { // args => table, key, value
 }
 
 atom *table(atom *entries) {
-	atom *tp, *result = mkatom(type_table);
+	atom *tp, *result = new_atom(type_table);
 	car(result) = cdr(result) = nil;
 	while (!no(entries)) {
 	loop_entries:
@@ -163,22 +173,21 @@ atom *table(atom *entries) {
 }
 
 atom *annotate(atom *args) {
-	atom *result = mkatom(type_tagged);
+	atom *result = new_atom(type_tagged);
 	tag(result) = car(args);
 	rep(result) = car(cdr(args));
 	return result;
 }
 
-atom *mkbuiltin(atom *(*function)(atom *)) {
-	atom *result = mkatom(type_builtin);
+atom *new_builtin(atom *(*function)(atom *)) {
+	atom *result = new_atom(type_builtin);
 	builtin(result) = function;
 	return result;
 }
 
-atom *mkfn(atom *args, atom *body, atom *env) {
-	atom *result = mkatom(type_fn);
-	car(result) = args;
-	cdr(result) = cons(body, env);
+atom *new_stream(FILE *stream) {
+	atom *result = new_atom(type_stream);
+	stream(result) = stream;
 	return result;
 }
 
@@ -236,22 +245,22 @@ char buf[MAXLEN];
 int bufused;
 
 void add_to_buf(char ch) { if(bufused < MAXLEN - 1) buf[bufused++] = ch; }
-char *buf2str() { buf[bufused++] = '\0'; return strdup(buf); }
-void setinput(FILE *fp) { ifp = fp; }
+char *buf_str() { buf[bufused++] = '\0'; return strdup(buf); }
+void set_input(FILE *fp) { ifp = fp; }
 void putback_token(char *token) { token_la = token; la_valid = 1; }
 
-char *gettoken() {
+char *read_token() {
 	int ch;
 	bufused = 0;
 	if(la_valid) { la_valid = 0; return token_la; }
 	do { if((ch = getc(ifp)) == EOF) return NULL; } while(isspace(ch));
 	add_to_buf(ch);
-	if(strchr("()\"`',@", ch)) return buf2str();
+	if(strchr("()\"`',@", ch)) return buf_str();
 	for(;;) {
 		if((ch = getc(ifp)) == EOF) exit(0);
 		if(strchr("()\"`',@", ch) || isspace(ch)) {
 			ungetc(ch, ifp);
-			return buf2str();
+			return buf_str();
 		}
 		add_to_buf(ch);
 	}
@@ -264,50 +273,50 @@ char strchar(const char *str) {
 	return str[2];
 }
 
-atom *readlist();
-atom *readstr();
-atom *readexpr() {
-	char *token = gettoken();
+atom *read_list();
+atom *read_str();
+atom *read_expr() {
+	char *token = read_token();
 	if (token == NULL) return nil;
-	if (!strcmp(token, "(")) return readlist();
-	if (!strcmp(token, "\"")) return readstr();
-	if (!strcmp(token, "'")) return cons(sym_quote, cons(readexpr(), nil));
-	if (!strcmp(token, "`")) return cons(sym_quasiquote, cons(readexpr(), nil));
+	if (!strcmp(token, "(")) return read_list();
+	if (!strcmp(token, "\"")) return read_str();
+	if (!strcmp(token, "'")) return cons(sym_quote, cons(read_expr(), nil));
+	if (!strcmp(token, "`")) return cons(sym_quasiquote, cons(read_expr(), nil));
 	if (!strcmp(token, ",")) {
 		char c = getc(ifp);
-		if (c == '@') return cons(sym_unquote_expand, cons(readexpr(), nil));
+		if (c == '@') return cons(sym_unquote_expand, cons(read_expr(), nil));
 		ungetc(c, ifp);
-		return cons(sym_unquote, cons(readexpr(), nil));
+		return cons(sym_unquote, cons(read_expr(), nil));
 	} else if (token[strspn(token, "0123456789.-")] == '\0') {
 		if (!strcmp(token, ".") || !strcmp(token, "-")) return intern(token);
-		return mknum((double)atof(token));
+		return new_num((double)atof(token));
 	} else if (strlen(token) > 2) { // possible reader macro
 		if (token[0] == '#' && token[1] == '\\') // char
-			return mkchar(strchar(token));
+			return new_char(strchar(token));
 	}
 	return intern(token);
 }
 
-atom *readlist() {
-	char *token = gettoken();
+atom *read_list() {
+	char *token = read_token();
 	atom *tmp;
 	if(!strcmp(token, ")")) return nil;
 	if(!strcmp(token, ".")) {
-		tmp = readexpr();
-		if(strcmp(gettoken(), ")")) return error("invalid syntax", tmp);
+		tmp = read_expr();
+		if(strcmp(read_token(), ")")) return error("invalid syntax", tmp);
 		return tmp;
 	}
 	putback_token(token);
-	tmp = readexpr();
-	return cons(tmp, readlist());
+	tmp = read_expr();
+	return cons(tmp, read_list());
 }
 
-atom *readstr() {
+atom *read_str() {
 	char c, cbuf[1024];
 	memset(cbuf, 0, 1024);
 	int n = 0;
 	while ((c = fgetc(ifp)) != '\"') cbuf[n++] = c;
-	return mkstr(cbuf);
+	return new_str(cbuf);
 }
 
 char *charstr(const char value) {
@@ -320,54 +329,55 @@ char *charstr(const char value) {
 
 atom *eval(atom *exp, atom *env);
 
-void writeexpr(FILE *stream, atom *expr) {
+void write_expr(FILE *stream, atom *expr) {
 	switch(type(expr)) {
 		case type_num: fprintf(stream, "%g", numval(expr)); break;
 		case type_sym: fprintf(stream, "%s", symval(expr)); break;
 		case type_str: fprintf(stream, "\"%s\"", symval(expr)); break;
 		case type_char: fprintf(stream, "#\\%s", charstr(charval(expr))); break;
 		case type_builtin: fprintf(stream, "#<builtin:%p>", builtin(expr)); break;
+		case type_stream: fprintf(stream, "#<stream:%p>", stream(expr)); break;
 		case type_fn:
 			fprintf(stream, "#<fn ");
-			writeexpr(stream, car(expr));
+			write_expr(stream, car(expr));
 			fprintf(stream, ": ");
-			writeexpr(stream, car(cdr(expr)));
+			write_expr(stream, car(cdr(expr)));
 			fprintf(stream, ">");
 			break;
 		case type_tagged:
 			fprintf(stream, "#<tagged %s ", symval(tag(expr)));
-			writeexpr(stream, rep(expr));
+			write_expr(stream, rep(expr));
 			putchar('>');
 			break;
 		case type_table:
 			fprintf(stream, "#table");
 			expr->type = type_cons;
-			writeexpr(stream, expr);
+			write_expr(stream, expr);
 			expr->type = type_table;
 			break;
 		case type_exception:
 			fprintf(stream, "exception:\n==> %s", symval(exmsg(expr)));
 			if (!no(exctx(expr))) {
 				fprintf(stream, "\n===>");
-				writeexpr(stream, exctx(expr));
+				write_expr(stream, exctx(expr));
 			}
 			break;
 		case type_cons: 
 			fprintf(stream, "(");
 			for(;;) {
-				writeexpr(stream, car(expr));
+				write_expr(stream, car(expr));
 				if (no(cdr(expr))) { fprintf(stream, ")"); break; }
 				expr = cdr(expr);
 				if (type(expr) != type_cons) {
 					fprintf(stream, " . ");
-					writeexpr(stream, expr);
+					write_expr(stream, expr);
 					fprintf(stream, ")");
 					break;
 				}
 				fprintf(stream, " ");
 			}
 			break;
-		default: eval(error("writeexpr not implemented for this type", nil), env_root);
+		default: eval(error("write_expr not implemented for this type", nil), env_root);
 	}
 }
 
@@ -384,7 +394,8 @@ atom *eval(atom *exp, atom *env) {
 		case type_table:
 		case type_tagged:
 		case type_exception:
-		case type_builtin: return exp;
+		case type_builtin:
+		case type_stream: return exp;
 		case type_sym:
 			tmp = assoc(exp, env);
 			if(tmp == nil) return error("unbound symbol", exp);
@@ -414,7 +425,7 @@ atom *eval(atom *exp, atom *env) {
 				}
 				return result;
 			} else if(op == sym_fn) {
-				return mkfn(car(args), cdr(args), env);
+				return new_fn(car(args), cdr(args), env);
 			} else if (op == sym_quote) {
 				return car(args);
 			} else if (op == sym_assign || op == intern("=")) {
@@ -472,7 +483,7 @@ atom *apply(atom *fn, atom *args, atom *env) {
 	switch (type(fn)) {
 		case type_builtin: return (*builtin(fn))(args);
 		case type_tagged: return apply(rep(fn), args, env);
-		case type_str: return mkchar(symval(fn)[(int)numval(car(args))]);
+		case type_str: return new_char(symval(fn)[(int)numval(car(args))]);
 		case type_table: return tget(fn, car(args));
 		case type_fn:
 			if (type(car(fn)) == type_sym)
@@ -512,13 +523,13 @@ atom *prim_type(atom *args) {
 }
 
 atom *prim_err(atom *args) {
-	return error(car(args), no(cdr(args)) ? nil : car(cdr(args)));
+	return error(symval(car(args)), no(cdr(args)) ? nil : car(cdr(args)));
 }
 
 atom *prim_add(atom *args) {
 	double sum;
 	for(sum = 0; !no(args); sum += numval(car(args)), args = cdr(args));
-	return mknum(sum);
+	return new_num(sum);
 }
 
 atom *prim_sub(atom *args) {
@@ -526,13 +537,13 @@ atom *prim_sub(atom *args) {
 	for(sum = numval(car(args)), args = cdr(args); 
 	    !no(args); 
 	    sum -= numval(car(args)), args = cdr(args));
-	return mknum(sum);
+	return new_num(sum);
 }
 
 atom *prim_mul(atom *args) {
 	double prod;
 	for(prod = 1; !no(args); prod *= numval(car(args)), args = cdr(args));
-	return mknum(prod);
+	return new_num(prod);
 }
 
 atom *prim_div(atom *args) {
@@ -540,7 +551,7 @@ atom *prim_div(atom *args) {
 	for (rem = numval(car(args)), args = cdr(args);
 	     !no(args);
 	     rem /= numval(car(args)), args = cdr(args));
-	return mknum(rem);
+	return new_num(rem);
 }
 
 atom *prim_lt(atom *args) {
@@ -556,7 +567,7 @@ atom *prim_pr(atom *args) {
 		switch (type(car(args))) {
 			case type_str: printf("%s", symval(car(args))); break;
 			case type_char: printf("%c", charval(car(args))); break;
-			default: writeexpr(stdout, car(args)); break;
+			default: write_expr(stdout, car(args)); break;
 		}
 		args = cdr(args);
 	}
@@ -567,19 +578,19 @@ atom *prim_cons(atom *args) { return cons(car(args), car(cdr(args))); }
 atom *prim_car(atom *args)  { return car(car(args)); }
 atom *prim_cdr(atom *args)  { return cdr(car(args)); }
 
-atom *load_arc_file(const char *path) {
+atom *arc_load_file(const char *path) {
 	printf("loading \"%s\"", path);
-	setinput(fopen(path, "r+"));
+	set_input(fopen(path, "r+"));
 	atom *expr = nil, *prev = nil;
-	while (prev = expr, !no(expr = eval(readexpr(), env_root))) putchar('.');
+	while (prev = expr, !no(expr = eval(read_expr(), env_root))) putchar('.');
 	putchar('\n');
 	fclose(ifp);
-	setinput(NULL);
+	set_input(NULL);
 	return prev;
 }
 
-void init_arc() {
-	nil = mksym("nil");
+void arc_init() {
+	nil = new_sym("nil");
 	symbol_root = cons(nil, nil);
 	env_root = env_create(nil);
 	env_assign(env_root, t = intern("t"), t);
@@ -591,32 +602,35 @@ void init_arc() {
 	sym_while = intern("while");
 	sym_fn = intern("fn");
 	sym_assign = intern("assign");
-	env_assign(env_root, intern("is"), mkbuiltin(prim_is));
-	env_assign(env_root, intern("type"), mkbuiltin(prim_type));
-	env_assign(env_root, intern("table"), mkbuiltin(table));
-	env_assign(env_root, intern("annotate"), mkbuiltin(annotate));
-	env_assign(env_root, intern("tset"), mkbuiltin(tset));
-	env_assign(env_root, intern("+"), mkbuiltin(prim_add));
-	env_assign(env_root, intern("-"), mkbuiltin(prim_sub));
-	env_assign(env_root, intern("*"), mkbuiltin(prim_mul));
-	env_assign(env_root, intern("/"), mkbuiltin(prim_div));
-	env_assign(env_root, intern("<"), mkbuiltin(prim_lt));
-	env_assign(env_root, intern("pr"), mkbuiltin(prim_pr));
-	env_assign(env_root, intern("cons"), mkbuiltin(prim_cons));
-	env_assign(env_root, intern("car"), mkbuiltin(prim_car));
-	env_assign(env_root, intern("cdr"), mkbuiltin(prim_cdr));
-	load_arc_file("arc.arc");
+	env_assign(env_root, intern("is"), new_builtin(prim_is));
+	env_assign(env_root, intern("type"), new_builtin(prim_type));
+	env_assign(env_root, intern("table"), new_builtin(table));
+	env_assign(env_root, intern("annotate"), new_builtin(annotate));
+	env_assign(env_root, intern("err"), new_builtin(prim_err));
+	env_assign(env_root, intern("+"), new_builtin(prim_add));
+	env_assign(env_root, intern("-"), new_builtin(prim_sub));
+	env_assign(env_root, intern("*"), new_builtin(prim_mul));
+	env_assign(env_root, intern("/"), new_builtin(prim_div));
+	env_assign(env_root, intern("<"), new_builtin(prim_lt));
+	env_assign(env_root, intern("pr"), new_builtin(prim_pr));
+	env_assign(env_root, intern("cons"), new_builtin(prim_cons));
+	env_assign(env_root, intern("car"), new_builtin(prim_car));
+	env_assign(env_root, intern("cdr"), new_builtin(prim_cdr));
+	env_assign(env_root, intern("stdin"), new_stream(stdin));
+	env_assign(env_root, intern("stdout"), new_stream(stdout));
+	env_assign(env_root, intern("stderr"), new_stream(stderr));
+	arc_load_file("arc.arc");
 }
 
 int main(int argc, char **argv) {
 	puts("  mtl-arc v0.1\n================");
-	init_arc();
-	setinput(stdin);
+	arc_init();
+	set_input(stdin);
 	for(;;) {
 		printf("%s", "> ");
-		atom *o = eval(readexpr(), env_root);
+		atom *o = eval(read_expr(), env_root);
 		printf("%s", "=> ");
-		writeexpr(stdout, o);
+		write_expr(stdout, o);
 		printf("\n");
 	}
 	return 0;
