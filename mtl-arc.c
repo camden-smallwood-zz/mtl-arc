@@ -358,7 +358,7 @@ void write_expr(FILE *stream, atom *expr) {
 		case type_exception:
 			fprintf(stream, "exception:\n==> %s", symval(exmsg(expr)));
 			if (!no(exctx(expr))) {
-				fprintf(stream, "\n===>");
+				fprintf(stream, "\n===> ");
 				write_expr(stream, exctx(expr));
 			}
 			break;
@@ -495,6 +495,8 @@ atom *apply(atom *fn, atom *args, atom *env) {
 }
 
 atom *prim_is(atom *args) {
+	if (no(args) || no(cdr(args)))
+		return error("invalid arguments supplied to 'is'", args);
 	atom *a, *b;
 	while (!no(cdr(args))) {
 		a = car(args);
@@ -511,18 +513,21 @@ atom *prim_type(atom *args) {
 	switch (type(car(args))) {
 		case type_num: return intern("num");
 		case type_sym: return intern("sym");
-		case type_cons: return intern("cons");
 		case type_str: return intern("str");
 		case type_char: return intern("char");
+		case type_cons: return intern("cons");
+		case type_fn: return intern("fn");
 		case type_table: return intern("table");
 		case type_tagged: return tag(car(args));
-		case type_fn: return intern("fn");
+		case type_exception: return intern("exception");
 		case type_builtin: return intern("builtin");
+		case type_stream: return intern("stream");
 	}
 	return error("unknown type of atom", car(args));
 }
 
 atom *prim_err(atom *args) {
+	if (no(args)) args = cons(new_str("unspecified"), nil);
 	return error(symval(car(args)), no(cdr(args)) ? nil : car(cdr(args)));
 }
 
@@ -556,6 +561,8 @@ atom *prim_div(atom *args) {
 
 atom *prim_lt(atom *args) {
 	atom *a, *b;
+	if (no(args) || no(cdr(args)) || !no(cdr(cdr(args))))
+		return error("invalid arguments supplied to '<'", args);
 	if (type(a = car(args)) == type_num &&
 	    type(b = car(cdr(args))) == type_num)
 		return numval(a) < numval(b) ? t : nil;
