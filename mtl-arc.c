@@ -586,11 +586,11 @@ atom *prim_car(atom *args)  { return car(car(args)); }
 atom *prim_cdr(atom *args)  { return cdr(car(args)); }
 
 atom *arc_load_file(const char *path) {
-	printf("loading \"%s\"", path);
+	printf("loading \"%s\"...\n", path);
 	set_input(fopen(path, "r+"));
-	atom *expr = nil, *prev = nil;
-	while (prev = expr, !no(expr = eval(read_expr(), env_root))) putchar('.');
-	putchar('\n');
+	atom *expr = nil, *prev;
+	while (prev = expr, !is(nil, expr = eval(read_expr(), env_root)))
+		if (iserr(expr)) { printf("=> "); write_expr(stdout, expr); putchar('\n'); }
 	fclose(ifp);
 	set_input(NULL);
 	return prev;
@@ -626,7 +626,7 @@ void arc_init() {
 	env_assign(env_root, intern("stdin"), new_stream(stdin));
 	env_assign(env_root, intern("stdout"), new_stream(stdout));
 	env_assign(env_root, intern("stderr"), new_stream(stderr));
-	arc_load_file("arc.arc");
+	atom *result = arc_load_file("arc.arc");
 }
 
 int main(int argc, char **argv) {
