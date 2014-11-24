@@ -584,8 +584,8 @@ atom prim_help(atom args) {
 		return new_str(help(place));
 	}
 	if (afn(place) || amac(place))
-		if (astr(car(cadr(place))))
-			return car(cadr(place));
+		if (astr(car(cddr(place))))
+			return car(cddr(place));
 	return nil;
 }
 
@@ -741,9 +741,9 @@ void arc_init() {
 	env_assign(root, intern("cons"), new_builtin(prim_cons,
 		"Constructs a pair of atoms (cons) from the provided first (car) and rest (cdr) atoms."));
 	env_assign(root, intern("car"), new_builtin(prim_car,
-		"Gets the car (first) of a pair of atoms (cons)."));
+		"Gets the first (car) of a pair of atoms (cons)."));
 	env_assign(root, intern("cdr"), new_builtin(prim_cdr,
-		"Gets the cdr (rest) of a pair of atoms (cons)."));
+		"Gets the rest (cdr) of a pair of atoms (cons)."));
 	env_assign(root, intern("table"), new_builtin(table,
 		"Creates a new table, optionally taking each two supplied arguments as a key/value pair."));
 	env_assign(root, intern("sym"), new_builtin(prim_sym,
