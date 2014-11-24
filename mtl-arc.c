@@ -469,6 +469,8 @@ atom eval(atom expr, atom env) {
 					case type_sym: return a == b ? t : nil;
 					case type_str: return !strcmp(strval(a), strval(b)) ? t : nil;
 					case type_char: return charval(a) == charval(b) ? t : nil;
+					case type_stream: return streamval(a) == streamval(b) ? t : nil;
+					case type_builtin: return primval(a) == primval(b) ? t : nil;
 					default: return err("no is for these yet", args);
 				}
 			}
