@@ -523,9 +523,10 @@ atom eval(atom expr, atom env) {
 		if (iserr(op = eval(op, env)))
 			return op;
 		if (amac(op)) {
-			atom ex;
 			type(op) = type_fn;
-			if (iserr(ex = apply(op, args, env)))
+			atom ex = apply(op, args, env);
+			type(op) = type_mac;
+			if (iserr(ex))
 				return ex;
 			return eval(ex, env);
 		}
@@ -534,53 +535,6 @@ atom eval(atom expr, atom env) {
 			if (iserr(car(p) = eval(car(p), env)))
 				return car(p);
 		return apply(op, args, env);
-	}
-}
-
-atom macex(atom expr) {
-	if (asym(expr)) {
-		return expr;
-	} else if (!acons(expr)) {
-		return expr;
-	} else if (!alist(expr)) {
-		return expr;
-	} else {
-		atom op = car(expr), args = cdr(expr);
-		if (asym(op)) {
-			if (op == sym_quote) {
-				if (no(args) || !no(cdr(args)))
-					return err("invalid arguments supplied to quote", args);
-				return expr;
-			} else if (op == sym_mac) {
-				if (no(args) || no(cdr(args)) || no(cddr(args)))
-					return err("invalid arguments supplied to mac", args);
-				atom name = car(args);
-				if (!asym(name))
-					return err("mac name must be a sym", name);
-				atom macro = new_mac(cadr(args), cddr(args), root);
-				if (iserr(macro))
-					return macro;
-				env_assign(root, name, macro);
-				return cons(sym_quote, cons(name, nil));
-			}
-		}
-		
-		atom result;
-		if (asym(op) && !iserr(result = env_get(root, op)) && amac(result)) {
-			if (iserr(op = eval(op, root)))
-				return op;
-			type(op) = type_fn;
-			atom result2 = apply(op, args, root);
-			if (iserr(result2))
-				return result2;
-			return macex(result2);
-		} else {
-			atom expr2 = copy_list(expr);
-			for (atom p = expr2; !no(p); p = cdr(p))
-				if (iserr(car(p) = macex(car(p))))
-					return car(p);
-			return expr2;
-		}
 	}
 }
 
@@ -698,7 +652,7 @@ atom arc_load_file(const char *path) {
 	printf("loading \"%s\"...\n", path);
 	FILE *stream = fopen(path, "r+");
 	atom prev, expr = nil;
-	while (prev = expr, (expr = macex(eval(read_expr(stream), root))) != nil)
+	while (prev = expr, (expr = eval(read_expr(stream), root)) != nil)
 		if (iserr(expr)) { printf("=> "); write_expr(stdout, expr); putchar('\n'); }
 	fclose(stream);
 	return prev;
@@ -742,7 +696,7 @@ int main(int argc, char **argv) {
 	arc_init();
 	for(;;) {
 		printf("%s", "> ");
-		atom result = macex(eval(read_expr(stdin), root));
+		atom result = eval(read_expr(stdin), root);
 		printf("%s", "=> ");
 		write_expr(stdout, result);
 		printf("\n");
