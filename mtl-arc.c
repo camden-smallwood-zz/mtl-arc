@@ -22,7 +22,7 @@ struct atom {
 		double num;
 		char *sym;
 		struct { atom car, cdr; };
-		struct { char *doc; builtin prim; };
+		struct { char *help; builtin prim; };
 		FILE *stream;
 	};
 };
@@ -53,10 +53,10 @@ atom nil, t, syms, root,
 #define amac(atom) (isa(atom, type_mac))
 #define atable(atom) (isa(atom, type_table))
 #define abuiltin(atom) (isa(atom, type_builtin))
-#define primdoc(atom) ((atom)->doc)
-#define primval(atom) ((atom)->prim)
+#define help(atom) ((atom)->help)
+#define prim(atom) ((atom)->prim)
 #define astream(atom) (isa(atom, type_stream))
-#define streamval(atom) ((atom)->stream)
+#define stream(atom) ((atom)->stream)
 #define iserr(atom) (isa(atom, type_exception))
 #define exctx(atom) (car(atom))
 #define exmsg(atom) (cdr(atom))
@@ -67,6 +67,19 @@ atom make(atom_type type) {
 	return result;
 }
 
+atom new_str(const char *str) {
+	atom result = make(type_str);
+	strval(result) = strdup(str);
+	return result;
+}
+
+atom err(const char *message, atom context) {
+	atom result = make(type_exception);
+	exctx(result) = context;
+	exmsg(result) = new_str(message);
+	return result;
+}
+
 atom new_num(const double num) {
 	atom result = make(type_num);
 	numval(result) = num;
@@ -74,14 +87,10 @@ atom new_num(const double num) {
 }
 
 atom new_sym(const char *sym) {
+	if (strchr(sym, ' ') != NULL)
+		return err("sym names may not contain spaces", nil);
 	atom result = make(type_sym);
 	symname(result) = strdup(sym);
-	return result;
-}
-
-atom new_str(const char *str) {
-	atom result = make(type_str);
-	strval(result) = strdup(str);
 	return result;
 }
 
@@ -170,25 +179,16 @@ atom table(atom entries) {
 
 atom new_builtin(builtin prim, const char *doc) {
 	atom result = make(type_builtin);
-	primdoc(result) = strdup(doc);
-	primval(result) = prim;
+	help(result) = strdup(doc);
+	prim(result) = prim;
 	return result;
 }
 
 atom new_stream(FILE *stream) {
 	atom result = make(type_stream);
-	streamval(result) = stream;
+	stream(result) = stream;
 	return result;
 }
-
-atom new_exception(const char *message, atom context) {
-	atom result = make(type_exception);
-	exctx(result) = context;
-	exmsg(result) = new_str(message);
-	return result;
-}
-
-#define err new_exception
 
 atom env_create(atom parent) {
 	return cons(parent, nil);
@@ -356,9 +356,9 @@ void write_expr(FILE *stream, atom expr) {
 		write_expr(stream, expr);
 		type(expr) = type_table;
 	} else if (abuiltin(expr)) {
-		fprintf(stream, "#<builtin %p>", primval(expr));
+		fprintf(stream, "#<builtin %p>", prim(expr));
 	} else if (astream(expr)) {
-		fprintf(stream, "#<stream %p>", streamval(expr));
+		fprintf(stream, "#<stream %p>", stream(expr));
 	} else if (iserr(expr)) {
 		fprintf(stream, "exception:\n==> %s", strval(exmsg(expr)));
 		if (!no(exctx(expr))) {
@@ -396,7 +396,7 @@ atom eval(atom expr, atom env);
 
 atom apply(atom fn, atom args, atom env) {
 	if (abuiltin(fn)) {
-		return (*primval(fn))(args);
+		return (*prim(fn))(args);
 	} else if (afn(fn)) {
 		atom env = env_create(car(fn));
 		for (atom names = cadr(fn); !no(names); names = cdr(names)) {
@@ -469,8 +469,8 @@ atom eval(atom expr, atom env) {
 					case type_sym: return a == b ? t : nil;
 					case type_str: return !strcmp(strval(a), strval(b)) ? t : nil;
 					case type_char: return charval(a) == charval(b) ? t : nil;
-					case type_stream: return streamval(a) == streamval(b) ? t : nil;
-					case type_builtin: return primval(a) == primval(b) ? t : nil;
+					case type_stream: return stream(a) == stream(b) ? t : nil;
+					case type_builtin: return prim(a) == prim(b) ? t : nil;
 					default: return err("no is for these yet", args);
 				}
 			}
@@ -549,6 +549,7 @@ atom eval(atom expr, atom env) {
 atom prim_type(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to 'type'", args);
+	if (car(args) == nil) return nil;
 	switch (type(car(args))) {
 		case type_num: return intern("num");
 		case type_sym: return intern("sym");
@@ -569,6 +570,23 @@ atom prim_err(atom args) {
 	if (no(args))
 		args = cons(new_str("unspecified"), nil);
 	return err(strval(car(args)), no(cdr(args)) ? nil : cadr(args));
+}
+
+atom prim_help(atom args) {
+	if (no(args) || !no(cdr(args)))
+		return err("invalid arguments supplied to help", args);
+	atom place;
+	if (asym(car(args)))
+		place = eval(car(args), root);
+	else place = car(args);
+	if (abuiltin(place)) {
+		if (help(place) == NULL) return nil;
+		return new_str(help(place));
+	}
+	if (afn(place) || amac(place))
+		if (astr(car(cadr(place))))
+			return car(cadr(place));
+	return nil;
 }
 
 atom prim_add(atom args) {
@@ -654,6 +672,29 @@ atom prim_cdr(atom args) {
 	return cdar(args);
 }
 
+atom prim_sym(atom args) {
+	if ((no(args) || !no(cdr(args))) || !astr(car(args)))
+		return err("invalid arguments supplied to sym", args);
+	return intern(strval(car(args)));
+}
+
+atom prim_str(atom args) {
+	if (no(args))
+		return err("invalid arguments supplied to str", args);
+	char buf[1024];
+	memset(buf, 0, sizeof(buf));
+	for (; !no(args); args = cdr(args)) {
+		switch (type(car(args))) {
+			case type_num: sprintf(buf, "%s%g", buf, numval(car(args))); break;
+			case type_sym: sprintf(buf, "%s%s", buf, symname(car(args))); break;
+			case type_str: sprintf(buf, "%s%s", buf, strval(car(args))); break;
+			case type_char: sprintf(buf, "%s%c", buf, charval(car(args))); break;
+			default: return err("no str representation available", car(args));
+		}
+	}
+	return new_str(buf);
+}
+
 atom arc_load_file(const char *path) {
 	printf("loading \"%s\"...\n", path);
 	FILE *stream = fopen(path, "r+");
@@ -679,18 +720,36 @@ void arc_init() {
 	sym_fn = intern("fn");
 	sym_mac = intern("mac");
 	env_assign(root, t = intern("t"), t);
-	env_assign(root, intern("type"), new_builtin(prim_type, ""));
-	env_assign(root, intern("err"), new_builtin(prim_err, ""));
-	env_assign(root, intern("+"), new_builtin(prim_add, ""));
-	env_assign(root, intern("-"), new_builtin(prim_sub, ""));
-	env_assign(root, intern("*"), new_builtin(prim_mul, ""));
-	env_assign(root, intern("/"), new_builtin(prim_div, ""));
-	env_assign(root, intern("<"), new_builtin(prim_lt, ""));
-	env_assign(root, intern("pr"), new_builtin(prim_pr, ""));
-	env_assign(root, intern("cons"), new_builtin(prim_cons, ""));
-	env_assign(root, intern("car"), new_builtin(prim_car, ""));
-	env_assign(root, intern("cdr"), new_builtin(prim_cdr, ""));
-	env_assign(root, intern("table"), new_builtin(table, ""));
+	env_assign(root, intern("type"), new_builtin(prim_type,
+		"Gets the type of an atom."));
+	env_assign(root, intern("err"), new_builtin(prim_err,
+		"Creates an exception which takes a message string and a context."));
+	env_assign(root, intern("help"), new_builtin(prim_help,
+		"Gets the help string of an atom if available."));
+	env_assign(root, intern("+"), new_builtin(prim_add,
+		"Calculates the incremental sum of the supplied numbers."));
+	env_assign(root, intern("-"), new_builtin(prim_sub,
+		"Calculates the incremental difference of the supplied numbers."));
+	env_assign(root, intern("*"), new_builtin(prim_mul,
+		"Calculates the incremental product of the supplied numbers."));
+	env_assign(root, intern("/"), new_builtin(prim_div,
+		"Calculates the incremental remainder of the supplied numbers."));
+	env_assign(root, intern("<"), new_builtin(prim_lt,
+		"Checks to see if each number is less than the next provided number."));
+	env_assign(root, intern("pr"), new_builtin(prim_pr,
+		"Prints each supplied atom to the stdout stream."));
+	env_assign(root, intern("cons"), new_builtin(prim_cons,
+		"Constructs a pair of atoms (cons) from the provided first (car) and rest (cdr) atoms."));
+	env_assign(root, intern("car"), new_builtin(prim_car,
+		"Gets the car (first) of a pair of atoms (cons)."));
+	env_assign(root, intern("cdr"), new_builtin(prim_cdr,
+		"Gets the cdr (rest) of a pair of atoms (cons)."));
+	env_assign(root, intern("table"), new_builtin(table,
+		"Creates a new table, optionally taking each two supplied arguments as a key/value pair."));
+	env_assign(root, intern("sym"), new_builtin(prim_sym,
+		"Creates a new symbol from the provided string."));
+	env_assign(root, intern("str"), new_builtin(prim_str,
+		"Creates a new string from the concatenated string representations of each supplied argument."));
 	env_assign(root, intern("stdin"), new_stream(stdin));
 	env_assign(root, intern("stdout"), new_stream(stdout));
 	env_assign(root, intern("stderr"), new_stream(stderr));
