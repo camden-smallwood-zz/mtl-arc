@@ -439,24 +439,24 @@ atom eval(atom expr, atom env) {
 		} else if (op == sym_if) {
 			atom cond;
 			while (!no(args)) {
-				if (iserr(cond = eval(car(args), env)))
-					return cond;
-				if (no(cdr(args)))
-					return cond;
-				if (!no(cond))
-					return eval(cadr(args), env);
+				if (iserr(cond = eval(car(args), env))) return cond;
+				if (no(cdr(args))) return cond;
+				if (!no(cond)) return eval(cadr(args), env);
 				args = cddr(args);
 			}
 			return nil;
 		} else if (op == sym_is) {
-			atom a = eval(car(args), env);
-			if (iserr(a))
-				return a;
-			atom b = eval(cadr(args), env);
-			if (iserr(b))
-				return b;
+			atom a, b;
+			if (iserr(a = eval(car(args), env))) return a;
+			if (iserr(b = eval(cadr(args), env))) return b;
 			if (type(a) == type(b)) {
-				
+				switch (type(a)) {
+					case type_num: return numval(a) == numval(b) ? t : nil;
+					case type_sym: return a == b ? t : nil;
+					case type_str: return !strcmp(strval(a), strval(b)) ? t : nil;
+					case type_char: return charval(a) == charval(b) ? t : nil;
+					default: return err("no is for these yet", args);
+				}
 			}
 			return nil;
 		} else if (op == sym_while) {
@@ -464,8 +464,7 @@ atom eval(atom expr, atom env) {
 				return err("invalid arguments supplied to while", args);
 			atom result, pred = car(args);
 			while (!iserr(result = eval(pred, env)) && !no(result)) {
-				if (iserr(result))
-					return result;
+				if (iserr(result)) return result;
 				for (atom e = cdr(args); !no(e); e = cdr(e))
 					if (iserr(result = eval(car(e), env)))
 						return result;
@@ -474,31 +473,25 @@ atom eval(atom expr, atom env) {
 		} else if (op == sym_assign) {
 			if (asym(car(args))) {
 				atom val = eval(cadr(args), env);
-				if (iserr(val))
-					return val;
+				if (iserr(val)) return val;
 				return env_assign_eq(env, car(args), val);
 			} else if (acons(car(args))) {
 				if (caar(args) == intern("car")) {
 					atom place = eval(car(cdar(args)), env);
-					if (iserr(place))
-						return place;
+					if (iserr(place)) return place;
 					atom val = eval(cadr(args), env);
-					if (iserr(val))
-						return val;
+					if (iserr(val)) return val;
 					return car(place) = val;
 				} else if (caar(args) == intern("cdr")) {
 					atom place = eval(car(cdar(args)), env);
-					if (iserr(place))
-						return place;
+					if (iserr(place)) return place;
 					atom val = eval(cadr(args), env);
-					if (iserr(val))
-						return val;
+					if (iserr(val)) return val;
 					return cdr(place) = val;
 				} else {
 					atom iop = eval(caar(args), env);
-					if (iserr(iop)) {
-						return iop;
-					} else if (atable(iop)) {
+					if (iserr(iop)) return iop;
+					else if (atable(iop)) {
 						atom key = eval(car(cdar(args)), env);
 						if (iserr(key))
 							return key;
@@ -526,8 +519,7 @@ atom eval(atom expr, atom env) {
 			type(op) = type_fn;
 			atom ex = apply(op, args, env);
 			type(op) = type_mac;
-			if (iserr(ex))
-				return ex;
+			if (iserr(ex)) return ex;
 			return eval(ex, env);
 		}
 		args = copy_list(args);
@@ -635,16 +627,14 @@ atom prim_cons(atom args) {
 atom prim_car(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to car", args);
-	if (car(args) == nil)
-		return nil;
+	if (car(args) == nil) return nil;
 	return caar(args);
 }
 
 atom prim_cdr(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to cdr", args);
-	if (car(args) == nil)
-		return nil;
+	if (car(args) == nil) return nil;
 	return cdar(args);
 }
 
