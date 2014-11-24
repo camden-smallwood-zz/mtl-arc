@@ -256,6 +256,7 @@ char *get_token(FILE *stream) {
 
 
 atom read_list(FILE *stream);
+atom read_str(FILE *stream);
 
 atom read_expr(FILE *stream) {
 	char *token = get_token(stream);
@@ -263,6 +264,11 @@ atom read_expr(FILE *stream) {
 		return nil;
 	} else if (!strcmp(token, "(")) {
 		return read_list(stream);
+	} else if (!strcmp(token, "\"")) {
+		return read_str(stream);
+	} else if (!strcmp(token, ";")) {
+		while (fgetc(stream) != '\n');
+		return read_expr(stream);
 	} else if (!strcmp(token, "'")) {
 		return cons(sym_quote, cons(read_expr(stream), nil));
 	} else if (!strcmp(token, "`")) {
@@ -296,6 +302,14 @@ atom read_list(FILE *stream) {
 	}
 	unget_token(token);
 	return cons(read_expr(stream), read_list(stream));
+}
+
+atom read_str(FILE *stream) {
+	char c, cbuf[1024];
+	memset(cbuf, 0, 1024);
+	int n = 0;
+	while ((c = fgetc(stream)) != '\"') cbuf[n++] = c;
+	return new_str(cbuf);
 }
 
 void write_expr(FILE *stream, atom expr) {
