@@ -698,6 +698,16 @@ atom prim_lt(atom args) {
 	return nil;
 }
 
+atom prim_gt(atom args) {
+	if ((no(args) || no(cdr(args)) || !no(cddr(args))) ||
+	    !anum(car(args)) || !anum(cadr(args)))
+		return err("invalid arguments supplied to >", args);
+	atom a, b;
+	if (anum(a = car(args)) && anum(b = cadr(args)))
+		return numval(a) > numval(b) ? t : nil;
+	return nil;
+}
+
 atom prim_pr(atom args) {
 	for (; !no(args); args = cdr(args)) {
 		if (astring(car(args))) {
@@ -739,7 +749,7 @@ atom prim_sym(atom args) {
 
 atom prim_string(atom args) {
 	if (no(args))
-		return err("invalid arguments supplied to str", args);
+		return err("invalid arguments supplied to string", args);
 	char buf[1024];
 	memset(buf, 0, sizeof(buf));
 	for (; !no(args); args = cdr(args)) {
@@ -824,6 +834,8 @@ void arc_init() {
 		"Calculates the incremental remainder of the supplied numbers."));
 	env_assign(root, intern("<"), new_builtin(prim_lt,
 		"Checks to see if each number is less than the next provided number."));
+	env_assign(root, intern(">"), new_builtin(prim_gt,
+		"Checks to see if each number is greater than the next provided number."));
 	env_assign(root, intern("pr"), new_builtin(prim_pr,
 		"Prints each supplied atom to the stdout stream."));
 	env_assign(root, intern("cons"), new_builtin(prim_cons,
