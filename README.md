@@ -18,7 +18,7 @@ Features:
 
 Syntax Sugar:
 =============
-* Quotaton: ``` 'a-symbol ```
+* Quotaton: ``` 'a-symbol => (quote a-symbol) ```
 * Quasiquotation: ``` `(list ,elem ,@elems) ```
 * Dotted: ``` car.x => (car x) ```
 * Brackets: ``` [+ _ 1] => (fn (_) (+ _ 1)) ```
