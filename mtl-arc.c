@@ -292,7 +292,9 @@ atom read_expr(FILE *stream) {
 	} else if (!strcmp(token, "(")) {
 		return read_list(stream);
 	} else if (!strcmp(token, "[")) {
-		//return read_bracket(stream);
+		atom body = read_bracket(stream);
+		if (iserr(body)) return body;
+		return cons(sym_fn, cons(cons(intern("_"), nil), cons(body, nil)));
 	} else if (!strcmp(token, "\"")) {
 		return read_string(stream);
 	} else if (!strcmp(token, ";")) {
@@ -338,8 +340,14 @@ atom read_list(FILE *stream) {
 	return cons(read_expr(stream), read_list(stream));
 }
 
-/*atom read_bracket(FILE *stream) {
-	char*/
+atom read_bracket(FILE *stream) {
+	char *token = get_token(stream);
+	if (!strcmp(token, "]")) {
+		return nil;
+	}
+	unget_token(token);
+	return cons(read_expr(stream), read_bracket(stream));
+}
 
 atom read_string(FILE *stream) {
 	char c, cbuf[1024];
