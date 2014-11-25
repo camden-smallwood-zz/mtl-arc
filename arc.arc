@@ -1,10 +1,14 @@
 
-(mac = args
-  (cons 'assign args))
+(mac = args (cons 'assign args))
 
 (= list (fn args
 "Creates a list containing the given 'args'."
   args))
+
+(= append (fn (a b)
+"Creates a new list of a with b appended to the end."
+  (if (no a) b
+    (cons (car a) (append (cdr a) b)))))
 
 (mac def (name args . body)
 "Defines a new function called 'name'. When called, the function runs
@@ -13,11 +17,6 @@ For more information see the tutorial: http://ycombinator.com/arc/tut.txt
 Or come ask questions at http://arclanguage.org/forum"
   (list '= name (cons 'fn (cons args body))))
 
-(def join (a b)
-"Creates a new list of a with b appended to the end."
-  (if (no a) b
-    (cons (car a) (join (cdr a) b))))
-
 (mac quasiquote (x)
   (if (isa x 'cons)
       (if (is (car x) 'unquote)
@@ -25,7 +24,7 @@ Or come ask questions at http://arclanguage.org/forum"
           (if (if (isa (car x) 'cons)
                 (is (caar x) 'unquote-expand)
                 nil)
-              (list 'join
+              (list 'append
                     (cadr (car x))
                     (list 'quasiquote (cdr x)))
               (list 'cons
@@ -50,6 +49,12 @@ Or come ask questions at http://arclanguage.org/forum"
       (car args))
     t))
 
+(mac or args
+"Stops at the first argument to pass, and returns its result."
+  (and args
+    `(if ,car.args ,car.args
+       (or ,@cdr.args))))
+
 (mac do args
 "Evaluates each expression in sequence and returns the result of the
 last expression."
@@ -61,8 +66,7 @@ last expression."
 
 (def map1 (f xs)
 "Returns a list containing the result of function 'f' applied to every element of 'xs'."
-  (if (no xs)
-    nil
+  (if (no xs) nil
     (cons (f car.xs)
           (map1 f cdr.xs))))
 
@@ -97,6 +101,24 @@ Generalizes [[map1]] to functions with more than one argument."
         (cons (apply f (map1 car seqs))
               (apply map f (map1 cdr seqs)))))
 
+(def prn args
+  (while args
+    (pr car.args)
+    (= args cdr.args))
+  (pr #\newline))
+
+(def join args
+  (let result nil
+    (while args
+      (let arg car.args
+        (if no.arg nil
+          (let seq car.arg
+            (if no.seq
+              (= result (append result (join cdr.arg)))
+              (= result (append result (cons car.seq (join (cons cdr.seq cdr.arg)))))))))
+      (= args cdr.args))
+    result))
+
 (mac with (parms . body)
 "Evaluates all expressions in 'body' under the bindings provided in 'parms'.
 Returns value of last expression in 'body'.
@@ -121,20 +143,20 @@ For example, (let x 1
 For example, (withs (x 1 y (+ x 1))
                (+ x y))
              => 3"
-  (if (no parms)
+  (if no.parms
     `(do ,@body)
-    `(let ,(car parms) ,(cadr parms)
-       (withs ,(cddr parms) ,@body))))
+    `(let ,car.parms ,cadr.parms
+       (withs ,cddr.parms ,@body))))
 
 (mac ret (var val . body)
 "Like [[let]], but returns 'val' rather than the value of the final form in 'body'."
   `(let ,var ,val ,@body ,var))
 
 (= uniq (let uniq-count 0
-  (fn () (sym (str "_uniq" (= uniq-count (+ uniq-count 1)))))))
+  (fn () (sym (string "_uniq" (= uniq-count (+ uniq-count 1)))))))
 
 (mac w/uniq (names . body)
   (if (isa names 'cons)
-    `(with ,(apply join (map (fn (x) (list x '(uniq))) names))
+    `(with ,(join (map (fn (x) (list x '(uniq))) names))
        ,@body)
     `(let ,names (uniq) ,@body)))
