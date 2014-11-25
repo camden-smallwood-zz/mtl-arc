@@ -1,30 +1,18 @@
 (mac def (name args . body)
+"Defines a new function named 'name'."
   ((fn x x) 'assign name (cons 'fn (cons args body))))
-
-(mac = args
-  (cons 'assign args))
 
 (def list args
 "Creates a list containing the given 'args'."
   args)
 
 (def no (x)
+"Checks to see if 'x' is 'nil'."
   (is x nil))
 
-(def isa (a b)
-  (is type.a b))
-
-(def acons (a)
-  (isa a 'cons))
-
-(def caar (x) (car car.x))
-(def cadr (x) (car cdr.x))
-(def cdar (x) (cdr car.x))
-(def cddr (x) (cdr cdr.x))
-
 (def append (a b)
-"Creates a new list of a with b appended to the end."
-  (if (no a) b
+"Creates a new list of 'a' with 'b' appended to the end."
+  (if no.a b
     (cons car.a (append cdr.a b))))
 
 (mac quasiquote (x)
@@ -41,11 +29,27 @@
                     (list 'quasiquote cdr.x))))
       (list 'quote x)))
 
-(def prn args
-  (while args
-    (pr car.args)
-    (= args cdr.args))
-  (pr #\newline))
+(def isa (a b) (is type.a b))
+(def isnt (x y) (no (is x y)))
+
+(def caar (x) (car car.x))
+(def cadr (x) (car cdr.x))
+(def cdar (x) (cdr car.x))
+(def cddr (x) (cdr cdr.x))
+
+(mac do args
+"Evaluates each expression in sequence and returns the result of the
+last expression."
+  `((fn () ,@args)))
+
+(mac when (test . body)
+"Like [[if]], but can take multiple expressions to run when 'test' is not nil.
+Can't take an 'else' branch."
+  `(if ,test (do ,@body)))
+
+(mac unless (test . body)
+"Opposite of [[when]]; runs multiple expressions when 'test' is nil."
+  `(if (no ,test) (do ,@body)))
 
 (mac and args
 "Stops at the first argument to fail (return nil). Returns the last argument before stopping."
@@ -61,10 +65,12 @@
     `(if ,car.args ,car.args
        (or ,@cdr.args))))
 
-(mac do args
-"Evaluates each expression in sequence and returns the result of the
-last expression."
-  `((fn () ,@args)))
+(def acons (a)
+  (isa a 'cons))
+
+(def alist (x)
+"Is 'x' a (possibly empty) list?"
+  (or no.x acons.x))
 
 (def idfn (x)
 "The identity function. Returns whatever is passed in."
@@ -107,6 +113,10 @@ Generalizes [[map1]] to functions with more than one argument."
         (cons (apply f (map1 car seqs))
               (apply map f (map1 cdr seqs)))))
 
+(mac = (x y)
+"Assigns 'x' to the value of 'y'."
+  `(assign ,x ,y))
+
 (def join args
   (let result nil
     (while args
@@ -125,9 +135,9 @@ Returns value of last expression in 'body'.
 For example, (with (x 1 y 2)
                (+ x y))
              => 3"
-  `((fn ,(map1 car (pair parms))
+  `((fn ,(map1 car pair.parms)
      ,@body)
-    ,@(map1 cadr (pair parms))))
+    ,@(map1 cadr pair.parms)))
 
 (mac let (var val . body)
 "Like [[with]] but with just one binding.
@@ -160,3 +170,49 @@ For example, (withs (x 1 y (+ x 1))
     `(with ,(join (map (fn (x) (list x '(uniq))) names))
        ,@body)
     `(let ,names (uniq) ,@body)))
+
+(mac do1 args
+"Like [[do]], but returns the value of the first arg rather than the last."
+  (w/uniq g
+    `(ret ,g ,car.args
+       ,@cdr.args)))
+
+(mac rfn (name parms . body)
+"Like [[fn]] but permits the created function to call itself recursively as the given 'name'."
+  `(let ,name nil
+     (assign ,name (fn ,parms ,@body))))
+
+(mac afn (parms . body)
+"Like [[fn]] and [[rfn]] but the created function can call itself as 'self'"
+  `(let self nil
+     (assign self (fn ,parms ,@body))))
+
+(mac loop (withses . body)
+"Like 'with', but the body can also be rerun with new bindings by calling 'recur'.
+Often a more readable alternative to [[rfn]] or [[afn]].
+For example, this prints numbers ad infinitum:
+  (loop (x 1)
+    (prn x)
+    (recur (+ x 1)))"
+  (let w pair.withses
+    `((rfn recur ,(map1 car w) ,@body)
+        ,@(map1 cadr w))))
+
+(def rev (xs)
+"Returns a list containing the elements of 'xs' back to front."
+  (loop (xs xs acc nil)
+    (if no.xs
+      acc
+      (recur cdr.xs
+             (cons car.xs acc)))))
+
+(mac in (x . choices)
+"Does 'x' match one of the given 'choices'?"
+  (w/uniq g
+    `(let ,g ,x
+       (or ,@(map1 (fn (c) `(is ,g ,c))
+                   choices)))))
+
+(def atom (x)
+"Is 'x' a simple type? (i.e. not list, table or user-defined)"
+  (in type.x 'num 'sym 'char 'string))
