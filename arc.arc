@@ -1,54 +1,58 @@
-
-(mac = args (cons 'assign args))
-
-(= list (fn args
-"Creates a list containing the given 'args'."
-  args))
-
-(= append (fn (a b)
-"Creates a new list of a with b appended to the end."
-  (if (no a) b
-    (cons (car a) (append (cdr a) b)))))
-
-(mac quasiquote (x)
-  (if (isa x 'cons)
-      (if (is (car x) 'unquote)
-          (cadr x)
-          (if (if (isa (car x) 'cons)
-                (is (caar x) 'unquote-expand)
-                nil)
-              (list 'append
-                    (cadr (car x))
-                    (list 'quasiquote (cdr x)))
-              (list 'cons
-                    (list 'quasiquote (car x))
-                    (list 'quasiquote (cdr x)))))
-      (list 'quote x)))
-
 (mac def (name args . body)
-  "Defines a new function."
-  `(= ,name (fn ,@(cons args body))))
+  ((fn x x) 'assign name (cons 'fn (cons args body))))
+
+(mac = args
+  (cons 'assign args))
+
+(def list args
+"Creates a list containing the given 'args'."
+  args)
+
+(def no (x)
+  (is x nil))
 
 (def isa (a b)
-  (is (type a) b))
-
-(def no (a)
-  (is a nil))
+  (is type.a b))
 
 (def acons (a)
   (isa a 'cons))
 
-(def caar (x) (car (car x)))
-(def cadr (x) (car (cdr x)))
-(def cdar (x) (cdr (car x)))
-(def cddr (x) (cdr (cdr x)))
+(def caar (x) (car car.x))
+(def cadr (x) (car cdr.x))
+(def cdar (x) (cdr car.x))
+(def cddr (x) (cdr cdr.x))
+
+(def append (a b)
+"Creates a new list of a with b appended to the end."
+  (if (no a) b
+    (cons car.a (append cdr.a b))))
+
+(mac quasiquote (x)
+  (if (isa x 'cons)
+      (if (is car.x 'unquote) cadr.x
+          (if (if (isa car.x 'cons)
+                (is caar.x 'unquote-expand)
+                nil)
+              (list 'append
+                    (cadr car.x)
+                    (list 'quasiquote cdr.x))
+              (list 'cons
+                    (list 'quasiquote car.x)
+                    (list 'quasiquote cdr.x))))
+      (list 'quote x)))
+
+(def prn args
+  (while args
+    (pr car.args)
+    (= args cdr.args))
+  (pr #\newline))
 
 (mac and args
 "Stops at the first argument to fail (return nil). Returns the last argument before stopping."
   (if args
-    (if (cdr args)
-      `(if ,(car args) (and ,@(cdr args)))
-      (car args))
+    (if cdr.args
+      `(if ,(car args) (and ,@cdr.args))
+      car.args)
     t))
 
 (mac or args
@@ -86,9 +90,9 @@ function 'f' to them."
 "Finds a (key value) pair in an association list 'al' of such pairs."
   (if (no acons.al)
        nil
-      (and (acons (car al)) (is (caar al) key))
-       (car al)
-      (assoc key (cdr al))))
+      (and (acons car.al) (is caar.al key))
+       car.al
+      (assoc key cdr.al)))
 
 (def alref (al key)
 "Returns the value of 'key' in an association list 'al' of (key value) pairs"
@@ -102,12 +106,6 @@ Generalizes [[map1]] to functions with more than one argument."
       (all idfn seqs)
         (cons (apply f (map1 car seqs))
               (apply map f (map1 cdr seqs)))))
-
-(def prn args
-  (while args
-    (pr car.args)
-    (= args cdr.args))
-  (pr #\newline))
 
 (def join args
   (let result nil
@@ -162,5 +160,3 @@ For example, (withs (x 1 y (+ x 1))
     `(with ,(join (map (fn (x) (list x '(uniq))) names))
        ,@body)
     `(let ,names (uniq) ,@body)))
-
-
