@@ -8,9 +8,9 @@
 #include <string.h>
 
 typedef enum {
-	type_num, type_sym, type_str, type_char,
-	type_cons, type_fn, type_mac, type_table,
-	type_builtin, type_stream, type_exception
+	type_num, type_sym, type_string, type_char, type_cons,
+	type_fn, type_mac, type_table, type_exception,
+	type_builtin, type_input, type_output
 } atom_type;
 
 typedef struct atom *atom;
@@ -38,8 +38,8 @@ atom nil, t, syms, root,
 #define numval(atom) ((atom)->num)
 #define asym(atom) (isa(atom, type_sym))
 #define symname(atom) ((atom)->sym)
-#define astr(atom) (isa(atom, type_str))
-#define strval(atom) ((atom)->sym)
+#define astring(atom) (isa(atom, type_string))
+#define stringval(atom) ((atom)->sym)
 #define achar(atom) (isa(atom, type_char))
 #define charval(atom) ((atom)->sym[0])
 #define acons(atom) (isa(atom, type_cons))
@@ -55,7 +55,8 @@ atom nil, t, syms, root,
 #define abuiltin(atom) (isa(atom, type_builtin))
 #define help(atom) ((atom)->help)
 #define prim(atom) ((atom)->prim)
-#define astream(atom) (isa(atom, type_stream))
+#define isinput(atom) (isa(atom, type_input))
+#define isoutput(atom) (isa(atom, type_output))
 #define stream(atom) ((atom)->stream)
 #define iserr(atom) (isa(atom, type_exception))
 #define exctx(atom) (car(atom))
@@ -67,16 +68,16 @@ atom make(atom_type type) {
 	return result;
 }
 
-atom new_str(const char *str) {
-	atom result = make(type_str);
-	strval(result) = strdup(str);
+atom new_string(const char *string) {
+	atom result = make(type_string);
+	stringval(result) = strdup(string);
 	return result;
 }
 
 atom err(const char *message, atom context) {
 	atom result = make(type_exception);
 	exctx(result) = context;
-	exmsg(result) = new_str(message);
+	exmsg(result) = new_string(message);
 	return result;
 }
 
@@ -101,45 +102,10 @@ atom new_char(const char c) {
 	return result;
 }
 
-char *charstr(const char value) {
-	if (value == '\n') return "#\\newline";
-	else if (value == '\t') return "#\\tab";
-	else if (value == ' ') return "#\\space";
-	char cbuf[] = { 0, 0, 0 };
-	sprintf(cbuf, "#\\%c", value);
-	return strdup(cbuf);
-}
-
-char strchar(const char *str) {
-	if (!strcmp(str, "#\\newline")) return '\n';
-	if (!strcmp(str, "#\\tab")) return '\t';
-	if (!strcmp(str, "#\\space")) return ' ';
-	return str[2];
-}
-
 atom cons(atom car, atom cdr) {
 	atom result = make(type_cons);
 	car(result) = car;
 	cdr(result) = cdr;
-	return result;
-}
-
-char **split_string(char *a_str, const char a_delim) {
-	int count = 0;
-	char **result = 0;
-	char *last_delim = 0;
-	char delim[] = { a_delim, 0 };
-	for (char *c = a_str; *c; c++)
-		if (a_delim == *c) { count++; last_delim = c; }
-	count += last_delim < (a_str + strlen(a_str) - 1);
-	count++;
-	result = (char **)malloc(sizeof(char *) * count);
-	if (result) {
-		int i = 0;
-		for (char *token = strtok(a_str, delim); token; token = strtok(0, delim))
-			*(result + i++) = strdup(token);
-		*(result + i) = 0;
-	}
 	return result;
 }
 
@@ -203,8 +169,14 @@ atom new_builtin(builtin prim, const char *doc) {
 	return result;
 }
 
-atom new_stream(FILE *stream) {
-	atom result = make(type_stream);
+atom new_input(FILE *stream) {
+	atom result = make(type_input);
+	stream(result) = stream;
+	return result;
+}
+
+atom new_output(FILE *stream) {
+	atom result = make(type_output);
 	stream(result) = stream;
 	return result;
 }
@@ -237,6 +209,41 @@ atom env_assign_eq(atom env, atom sym, atom val) {
 	return env_assign(env, sym, val);
 }
 
+char *charstr(const char value) {
+	if (value == '\n') return "#\\newline";
+	else if (value == '\t') return "#\\tab";
+	else if (value == ' ') return "#\\space";
+	char cbuf[] = { 0, 0, 0 };
+	sprintf(cbuf, "#\\%c", value);
+	return strdup(cbuf);
+}
+
+char strchar(const char *str) {
+	if (!strcmp(str, "#\\newline")) return '\n';
+	if (!strcmp(str, "#\\tab")) return '\t';
+	if (!strcmp(str, "#\\space")) return ' ';
+	return str[2];
+}
+
+char **split_string(char *a_str, const char a_delim) {
+	int count = 0;
+	char **result = 0;
+	char *last_delim = 0;
+	char delim[] = { a_delim, 0 };
+	for (char *c = a_str; *c; c++)
+		if (a_delim == *c) { count++; last_delim = c; }
+	count += last_delim < (a_str + strlen(a_str) - 1);
+	count++;
+	result = (char **)malloc(sizeof(char *) * count);
+	if (result) {
+		int i = 0;
+		for (char *token = strtok(a_str, delim); token; token = strtok(0, delim))
+			*(result + i++) = strdup(token);
+		*(result + i) = 0;
+	}
+	return result;
+}
+
 int buf_size = 0, last_valid = 0;
 #define BUF_MAX 1024
 char buf[BUF_MAX], *last_token;
@@ -262,10 +269,10 @@ char *get_token(FILE *stream) {
 	if(last_valid) { last_valid = 0; return last_token; }
 	do { if((ch = getc(stream)) == EOF) return NULL; } while(isspace(ch));
 	add_to_buf(ch);
-	if(strchr("()\"`',;", ch)) return buf_to_string();
+	if(strchr("()[]\"`',;", ch)) return buf_to_string();
 	for(;;) {
 		if((ch = getc(stream)) == EOF) exit(0);
-		if(strchr("()\"`',;", ch) || isspace(ch)) {
+		if(strchr("()[]\"`',;", ch) || isspace(ch)) {
 			ungetc(ch, stream);
 			return buf_to_string();
 		}
@@ -275,7 +282,8 @@ char *get_token(FILE *stream) {
 
 
 atom read_list(FILE *stream);
-atom read_str(FILE *stream);
+atom read_bracket(FILE *stream);
+atom read_string(FILE *stream);
 
 atom read_expr(FILE *stream) {
 	char *token = get_token(stream);
@@ -283,8 +291,10 @@ atom read_expr(FILE *stream) {
 		return nil;
 	} else if (!strcmp(token, "(")) {
 		return read_list(stream);
+	} else if (!strcmp(token, "[")) {
+		//return read_bracket(stream);
 	} else if (!strcmp(token, "\"")) {
-		return read_str(stream);
+		return read_string(stream);
 	} else if (!strcmp(token, ";")) {
 		while (fgetc(stream) != '\n');
 		return read_expr(stream);
@@ -328,12 +338,15 @@ atom read_list(FILE *stream) {
 	return cons(read_expr(stream), read_list(stream));
 }
 
-atom read_str(FILE *stream) {
+/*atom read_bracket(FILE *stream) {
+	char*/
+
+atom read_string(FILE *stream) {
 	char c, cbuf[1024];
 	memset(cbuf, 0, 1024);
 	int n = 0;
 	while ((c = fgetc(stream)) != '\"') cbuf[n++] = c;
-	return new_str(cbuf);
+	return new_string(cbuf);
 }
 
 void write_expr(FILE *stream, atom expr) {
@@ -341,8 +354,8 @@ void write_expr(FILE *stream, atom expr) {
 		fprintf(stream, "%g", numval(expr));
 	} else if (asym(expr)) {
 		fprintf(stream, "%s", symname(expr));
-	} else if (astr(expr)) {
-		fprintf(stream, "\"%s\"", strval(expr));
+	} else if (astring(expr)) {
+		fprintf(stream, "\"%s\"", stringval(expr));
 	} else if (achar(expr)) {
 		fprintf(stream, "%s", charstr(charval(expr)));
 	} else if (acons(expr)) {
@@ -381,10 +394,12 @@ void write_expr(FILE *stream, atom expr) {
 		type(expr) = type_table;
 	} else if (abuiltin(expr)) {
 		fprintf(stream, "#<builtin %p>", prim(expr));
-	} else if (astream(expr)) {
-		fprintf(stream, "#<stream %p>", stream(expr));
+	} else if (isinput(expr)) {
+		fprintf(stream, "#<input %p>", stream(expr));
+	} else if (isoutput(expr)) {
+		fprintf(stream, "#<output %p>", stream(expr));
 	} else if (iserr(expr)) {
-		fprintf(stream, "exception:\n==> %s", strval(exmsg(expr)));
+		fprintf(stream, "exception:\n==> %s", stringval(exmsg(expr)));
 		if (!no(exctx(expr))) {
 			fprintf(stream, ": ");
 			write_expr(stream, exctx(expr));
@@ -454,8 +469,8 @@ atom apply(atom fn, atom args, atom env) {
 			if (iserr(result = eval(car(body), env)))
 				return result;
 		return result;
-	} else if (astr(fn)) {
-		return new_char(strval(fn)[(int)numval(car(args))]);
+	} else if (astring(fn)) {
+		return new_char(stringval(fn)[(int)numval(car(args))]);
 	} else if (atable(fn)) {
 		return tget(fn, car(args));
 	} else {
@@ -491,11 +506,12 @@ atom eval(atom expr, atom env) {
 				switch (type(a)) {
 					case type_num: return numval(a) == numval(b) ? t : nil;
 					case type_sym: return a == b ? t : nil;
-					case type_str: return !strcmp(strval(a), strval(b)) ? t : nil;
+					case type_string: return !strcmp(stringval(a), stringval(b)) ? t : nil;
 					case type_char: return charval(a) == charval(b) ? t : nil;
-					case type_stream: return stream(a) == stream(b) ? t : nil;
 					case type_builtin: return prim(a) == prim(b) ? t : nil;
-					default: return err("no is for these yet", args);
+					case type_input:
+					case type_output: return stream(a) == stream(b) ? t : nil;
+					default: return nil;
 				}
 			}
 			return nil;
@@ -573,18 +589,18 @@ atom eval(atom expr, atom env) {
 atom prim_type(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to 'type'", args);
-	if (car(args) == nil) return nil;
 	switch (type(car(args))) {
 		case type_num: return intern("num");
 		case type_sym: return intern("sym");
-		case type_str: return intern("str");
+		case type_string: return intern("string");
 		case type_char: return intern("char");
 		case type_cons: return intern("cons");
 		case type_fn: return intern("fn");
 		case type_mac: return intern("mac");
 		case type_table: return intern("table");
 		case type_builtin: return intern("builtin");
-		case type_stream: return intern("stream");
+		case type_input: return intern("input");
+		case type_output: return intern("output");
 		case type_exception: return intern("exception");
 	}
 	return err("unknown type of atom", car(args));
@@ -592,8 +608,8 @@ atom prim_type(atom args) {
 
 atom prim_err(atom args) {
 	if (no(args))
-		args = cons(new_str("unspecified"), nil);
-	return err(strval(car(args)), no(cdr(args)) ? nil : cadr(args));
+		args = cons(new_string("unspecified"), nil);
+	return err(stringval(car(args)), no(cdr(args)) ? nil : cadr(args));
 }
 
 atom prim_help(atom args) {
@@ -605,10 +621,10 @@ atom prim_help(atom args) {
 	else place = car(args);
 	if (abuiltin(place)) {
 		if (help(place) == NULL) return nil;
-		return new_str(help(place));
+		return new_string(help(place));
 	}
 	if (afn(place) || amac(place))
-		if (astr(car(cddr(place))))
+		if (astring(car(cddr(place))))
 			return car(cddr(place));
 	return nil;
 }
@@ -665,8 +681,8 @@ atom prim_lt(atom args) {
 
 atom prim_pr(atom args) {
 	for (; !no(args); args = cdr(args)) {
-		if (astr(car(args))) {
-			printf("%s", strval(car(args)));
+		if (astring(car(args))) {
+			printf("%s", stringval(car(args)));
 		} else if (achar(car(args))) {
 			printf("%c", charval(car(args)));
 		} else {
@@ -697,12 +713,12 @@ atom prim_cdr(atom args) {
 }
 
 atom prim_sym(atom args) {
-	if ((no(args) || !no(cdr(args))) || !astr(car(args)))
+	if ((no(args) || !no(cdr(args))) || !astring(car(args)))
 		return err("invalid arguments supplied to sym", args);
-	return intern(strval(car(args)));
+	return intern(stringval(car(args)));
 }
 
-atom prim_str(atom args) {
+atom prim_string(atom args) {
 	if (no(args))
 		return err("invalid arguments supplied to str", args);
 	char buf[1024];
@@ -711,12 +727,12 @@ atom prim_str(atom args) {
 		switch (type(car(args))) {
 			case type_num: sprintf(buf, "%s%g", buf, numval(car(args))); break;
 			case type_sym: sprintf(buf, "%s%s", buf, symname(car(args))); break;
-			case type_str: sprintf(buf, "%s%s", buf, strval(car(args))); break;
+			case type_string: sprintf(buf, "%s%s", buf, stringval(car(args))); break;
 			case type_char: sprintf(buf, "%s%c", buf, charval(car(args))); break;
-			default: return err("no str representation available", car(args));
+			default: return err("no string representation available", car(args));
 		}
 	}
-	return new_str(buf);
+	return new_string(buf);
 }
 
 atom prim_apply(atom args) {
@@ -790,11 +806,11 @@ void arc_init() {
 		"Creates a new table, optionally taking each two supplied arguments as a key/value pair."));
 	env_assign(root, intern("sym"), new_builtin(prim_sym,
 		"Creates a new symbol from the provided string."));
-	env_assign(root, intern("str"), new_builtin(prim_str,
+	env_assign(root, intern("string"), new_builtin(prim_string,
 		"Creates a new string from the concatenated string representations of each supplied argument."));
-	env_assign(root, intern("stdin"), new_stream(stdin));
-	env_assign(root, intern("stdout"), new_stream(stdout));
-	env_assign(root, intern("stderr"), new_stream(stderr));
+	env_assign(root, intern("stdin"), new_input(stdin));
+	env_assign(root, intern("stdout"), new_output(stdout));
+	env_assign(root, intern("stderr"), new_output(stderr));
 	arc_load_file("arc.arc");
 }
 
