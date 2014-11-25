@@ -18,10 +18,10 @@ Features:
 
 Syntax Sugar:
 =============
-* Quotaton: 'a-symbol
-* Quasiquotation: `(list ,elem ,@elems)
-* Dotted: car.x => (car x)
-* Brackets: [+ _ 1] => (fn (_) (+ _ 1))
+* Quotaton: ``` 'a-symbol ```
+* Quasiquotation: ``` `(list ,elem ,@elems) ```
+* Dotted: ``` car.x => (car x) ```
+* Brackets: ``` [+ _ 1] => (fn (_) (+ _ 1)) ```
 
 Special Forms:
 ==============
