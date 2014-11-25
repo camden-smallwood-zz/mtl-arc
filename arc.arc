@@ -1,3 +1,8 @@
+
+(mac = (x y)
+"Assigns 'x' to the value of 'y'."
+  `(assign ,x ,y))
+
 (mac def (name args . body)
 "Defines a new function named 'name'."
   ((fn x x) 'assign name (cons 'fn (cons args body))))
@@ -5,6 +10,13 @@
 (def list args
 "Creates a list containing the given 'args'."
   args)
+
+(def prn args
+"Prints each supplied argument incrementally on a new line."
+  (while args
+    (pr car.args)
+    (= args cdr.args))
+  (pr #\newline))
 
 (def no (x)
 "Checks to see if 'x' is 'nil'."
@@ -113,10 +125,6 @@ Generalizes [[map1]] to functions with more than one argument."
         (cons (apply f (map1 car seqs))
               (apply map f (map1 cdr seqs)))))
 
-(mac = (x y)
-"Assigns 'x' to the value of 'y'."
-  `(assign ,x ,y))
-
 (def join args
   (let result nil
     (while args
@@ -167,7 +175,7 @@ For example, (withs (x 1 y (+ x 1))
 
 (mac w/uniq (names . body)
   (if (isa names 'cons)
-    `(with ,(join (map (fn (x) (list x '(uniq))) names))
+    `(with ,(join (map [list _ '(uniq)] names))
        ,@body)
     `(let ,names (uniq) ,@body)))
 
@@ -216,3 +224,26 @@ For example, this prints numbers ad infinitum:
 (def atom (x)
 "Is 'x' a simple type? (i.e. not list, table or user-defined)"
   (in type.x 'num 'sym 'char 'string))
+
+(def iso (x y)
+"Are 'x' and 'y' equal-looking to each other? Non-atoms like lists and tables can contain
+the same elements (be *isomorphic*) without being identical."
+  (or (is x y)
+      (and (acons x) (acons y)
+           (iso car.x car.y)
+           (iso cdr.x cdr.y))))
+
+(def reclist (f xs)
+"Calls function 'f' with successive [[cdr]]s of 'xs' until one of the calls passes."
+  (and xs (or f.xs (if acons.xs (reclist f cdr.xs)))))
+
+(def recstring (test s (o start 0))
+"Calls function 'test' with successive characters in string 's' until one of the calls passes."
+  (loop (i start)
+    (and (< i len.s)
+         (or test.i
+             (recur (+ i 1))))))
+
+(def testify (x)
+"Turns an arbitrary value 'x' into a predicate function to compare with 'x'."
+  (if (isa x 'fn) x [iso _ x]))
