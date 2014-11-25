@@ -144,10 +144,6 @@ char **split_string(char *a_str, const char a_delim) {
 }
 
 atom intern(const char *sym) {
-	if (sym[0] != '.' && sym[strlen(sym) - 1] != '.' && strchr(sym, '.') != NULL) {
-    	char **syms = split_string(sym, '.');
-    	return cons(intern(syms[0]), cons(intern(syms[1]), nil));
-    }
 	for (atom p = syms; !no(p); p = cdr(p))
 		if (!strcmp(sym, symname(car(p))))
 			return car(p);
@@ -306,7 +302,12 @@ atom read_expr(FILE *stream) {
 		if (!strcmp(token, "-") || !strcmp(token, "."))
 			return intern(token);
 		return new_num(atof(token));
-	} else if (strlen(token) > 2) { // possible reader macro
+	} else if (token[0] != '.' &&
+	           token[strlen(token) - 1] != '.' &&
+	           strchr(token, '.') != NULL) {
+    	char **syms = split_string(token, '.');
+    	return cons(intern(syms[0]), cons(intern(syms[1]), nil));
+    } else if (strlen(token) > 2) { // possible reader macro
 		if (token[0] == '#' && token[1] == '\\') // char
 			return new_char(strchar(token));
 	}
