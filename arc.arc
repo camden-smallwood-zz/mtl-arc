@@ -10,13 +10,6 @@
   (if (no a) b
     (cons (car a) (append (cdr a) b)))))
 
-(mac def (name args . body)
-"Defines a new function called 'name'. When called, the function runs
-'body', parameterizing 'parms' with call arguments.
-For more information see the tutorial: http://ycombinator.com/arc/tut.txt
-Or come ask questions at http://arclanguage.org/forum"
-  (list '= name (cons 'fn (cons args body))))
-
 (mac quasiquote (x)
   (if (isa x 'cons)
       (if (is (car x) 'unquote)
@@ -32,9 +25,18 @@ Or come ask questions at http://arclanguage.org/forum"
                     (list 'quasiquote (cdr x)))))
       (list 'quote x)))
 
-(def isa (a b) (is (type a) b))
-(def no (a) (is a nil))
-(def acons (a) (isa a 'cons))
+(mac def (name args . body)
+  "Defines a new function."
+  `(= ,name (fn ,@(cons args body))))
+
+(def isa (a b)
+  (is (type a) b))
+
+(def no (a)
+  (is a nil))
+
+(def acons (a)
+  (isa a 'cons))
 
 (def caar (x) (car (car x)))
 (def cadr (x) (car (cdr x)))
@@ -160,3 +162,5 @@ For example, (withs (x 1 y (+ x 1))
     `(with ,(join (map (fn (x) (list x '(uniq))) names))
        ,@body)
     `(let ,names (uniq) ,@body)))
+
+
