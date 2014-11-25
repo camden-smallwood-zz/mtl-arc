@@ -433,7 +433,7 @@ atom copy_list(atom list) {
 
 atom eval(atom expr, atom env);
 
-atom apply(atom fn, atom args, atom env) {
+atom apply(atom fn, atom args) {
 	if (abuiltin(fn)) {
 		return (*prim(fn))(args);
 	} else if (afn(fn)) {
@@ -573,7 +573,7 @@ atom eval(atom expr, atom env) {
 			return op;
 		if (amac(op)) {
 			type(op) = type_fn;
-			atom ex = apply(op, args, env);
+			atom ex = apply(op, args);
 			type(op) = type_mac;
 			if (iserr(ex)) return ex;
 			return eval(ex, env);
@@ -582,7 +582,7 @@ atom eval(atom expr, atom env) {
 		for (atom p = args; !no(p); p = cdr(p))
 			if (iserr(car(p) = eval(car(p), env)))
 				return car(p);
-		return apply(op, args, env);
+		return apply(op, args);
 	}
 }
 
@@ -737,10 +737,7 @@ atom prim_string(atom args) {
 
 atom prim_apply(atom args) {
 	if (no(args)) return err("invalid arguments supplied to apply", args);
-	if (asym(car(args)))
-		car(args) = eval(car(args), root);
-	if (iserr(car(args))) return car(args);
-	return apply(car(args), cdr(args), root);
+	return apply(car(args), cdr(args));
 }
 
 atom prim_eval(atom args) {
