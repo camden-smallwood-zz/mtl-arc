@@ -20,13 +20,9 @@ Special Forms:
 ==============
 ```quote, assign, if, is, while, fn, mac```
 
-Builtin Variables:
-==================
-```stdin, stdout, stderr```
-
 Builtin Functions:
 ==================
-```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, sym, string, len```
+```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, sym, string, len, stdin, stdout, stderr```
 
 Defined Functions:
 ==================
