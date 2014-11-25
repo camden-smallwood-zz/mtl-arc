@@ -4,17 +4,24 @@ A new implementation of the Arc language
 
 This is a major work in progress, and will change quite often. 
 The core is a bare-minimum C interpreter designed for building Arc on top of. 
-It currently consists of less than 900 lines of code. 
+It currently consists of less than 1000 lines of code. 
 My goal is to maintain the simplicity, readability and speed of the core, while defining as much of Arc in Arc itself as possible. 
 There is currently no garbage collection; I'm looking over what I consider 'options'.
 
 Features:
 =========
 * Double-precision floating-point numbers, strings, characters, macros, tables, exceptions, streams
-* Implicit string indexing
+* Implicit list and string indexing
 * Implicit table referencing
-* Builtin "place" assignments (table & conses)
+* Builtin "place" assignments (cons, list, table, string)
 * End-of-line comments
+
+Syntax Sugar:
+=============
+* Quotaton: 'a-symbol
+* Quasiquotation: `(list ,elem ,@elems)
+* Dotted: car.x => (car x)
+* Brackets: [+ _ 1] => (fn (_) (+ _ 1))
 
 Special Forms:
 ==============
@@ -22,7 +29,7 @@ Special Forms:
 
 Builtin Functions:
 ==================
-```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, sym, string, len, stdin, stdout, stderr```
+```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, sym, string, len, stdin, stdout, stderr, load```
 
 Defined Functions:
 ==================
