@@ -280,7 +280,6 @@ char *get_token(FILE *stream) {
 	}
 }
 
-
 atom read_list(FILE *stream);
 atom read_bracket(FILE *stream);
 atom read_string(FILE *stream);
@@ -557,9 +556,21 @@ atom eval(atom expr, atom env) {
 					if (iserr(iop)) return iop;
 					else if (atable(iop)) {
 						atom key = eval(car(cdar(args)), env);
-						if (iserr(key))
-							return key;
-						return tset(iop, key, eval(cadr(args), env));
+						if (iserr(key)) return key;
+						atom value = eval(cadr(args), env);
+						if (iserr(value)) return value;
+						return tset(iop, key, value);
+					} else if (astring(iop)) {
+						atom index = eval(car(cdar(args)), env);
+						if (iserr(index)) return index;
+						if (!anum(index) || numval(index) < 0 || numval(index) >= strlen(stringval(iop)))
+							return err("invalid index applied to string", index);
+						atom value = eval(cadr(args), env);
+						if (iserr(value)) return value;
+						if (!achar(value))
+							return err("value of a string element must be a character", value);
+						stringval(iop)[(int)numval(index)] = charval(value);
+						return value;
 					}
 				}
 			}
