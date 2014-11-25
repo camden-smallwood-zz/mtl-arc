@@ -789,6 +789,24 @@ atom prim_len(atom args) {
 	return err("invalid argument supplied to 'len'", args);
 }
 
+atom prim_stdin(atom args) {
+	if (!no(args))
+		return err("invalid arguments supplied to 'stdin'", args);
+	return new_input(stdin);
+}
+
+atom prim_stdout(atom args) {
+	if (!no(args))
+		return err("invalid arguments supplied to 'stdout'", args);
+	return new_output(stdout);
+}
+
+atom prim_stderr(atom args) {
+	if (!no(args))
+		return err("invalid arguments supplied to 'stderr'", args);
+	return new_output(stderr);
+}
+
 atom arc_load_file(const char *path) {
 	printf("loading \"%s\"...\n", path);
 	FILE *stream = fopen(path, "r+");
@@ -852,9 +870,9 @@ void arc_init() {
 		"Creates a new string from the concatenated string representations of each supplied argument."));
 	env_assign(root, intern("len"), new_builtin(prim_len,
 		"Calculates the length of the supplied list or string."));
-	env_assign(root, intern("stdin"), new_input(stdin));
-	env_assign(root, intern("stdout"), new_output(stdout));
-	env_assign(root, intern("stderr"), new_output(stderr));
+	env_assign(root, intern("stdin"), new_builtin(prim_stdin, ""));
+	env_assign(root, intern("stdout"), new_builtin(prim_stdout, ""));
+	env_assign(root, intern("stderr"), new_builtin(prim_stderr, ""));
 	arc_load_file("arc.arc");
 }
 
