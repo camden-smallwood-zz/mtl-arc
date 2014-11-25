@@ -480,6 +480,13 @@ atom apply(atom fn, atom args) {
 		return new_char(stringval(fn)[(int)numval(car(args))]);
 	} else if (atable(fn)) {
 		return tget(fn, car(args));
+	} else if (alist(fn)) {
+		if (no(args) || !no(cdr(args)) || !anum(car(args)))
+			return err("invalid arguments supplied as list index", args);
+		for (int i = 0; !no(fn); fn = cdr(fn), i++)
+			if (i == (int)numval(car(args)))
+				return car(fn);
+		return err("index is outside the bounds of the list", car(args));
 	} else {
 		return err("invalid operator supplied to apply", fn);
 	}
@@ -553,8 +560,20 @@ atom eval(atom expr, atom env) {
 					return cdr(place) = val;
 				} else {
 					atom iop = eval(caar(args), env);
-					if (iserr(iop)) return iop;
-					else if (atable(iop)) {
+					if (iserr(iop)) {
+						return iop;
+					} else if (alist(iop)) {
+						atom index = eval(car(cdar(args)), env);
+						if (iserr(index)) return index;
+						if (!anum(index))
+							return err("invalid index supplied to list", index);
+						atom value = eval(cadr(args), env);
+						if (iserr(value)) return value;
+						for (int i = 0; !no(iop); iop = cdr(iop), i++)
+							if (i == (int)numval(index))
+								return car(iop) = value;
+						return err("index is outside the bounds of the list", index);
+					} else if (atable(iop)) {
 						atom key = eval(car(cdar(args)), env);
 						if (iserr(key)) return key;
 						atom value = eval(cadr(args), env);
@@ -817,6 +836,12 @@ atom arc_load_file(const char *path) {
 	return prev;
 }
 
+atom prim_load(atom args) {
+	if (no(args) || !no(cdr(args)) || !astring(car(args)))
+		return err("invalid arguments supplied to 'load'", args);
+	return arc_load_file(stringval(car(args)));
+}
+
 void arc_init() {
 	nil = new_sym("nil");
 	syms = cons(nil, nil);
@@ -873,6 +898,8 @@ void arc_init() {
 	env_assign(root, intern("stdin"), new_builtin(prim_stdin, ""));
 	env_assign(root, intern("stdout"), new_builtin(prim_stdout, ""));
 	env_assign(root, intern("stderr"), new_builtin(prim_stderr, ""));
+	env_assign(root, intern("load"), new_builtin(prim_load,
+		"Loads a file into the root environment."));
 	arc_load_file("arc.arc");
 }
 
