@@ -750,8 +750,22 @@ atom prim_apply(atom args) {
 
 atom prim_eval(atom args) {
 	if (no(args) || !no(cdr(args)))
-		return err("invalid arguments supplied to eval", args);
+		return err("invalid arguments supplied to 'eval'", args);
 	return eval(car(args), root);
+}
+
+atom prim_len(atom args) {
+	if (no(args) || !no(cdr(args)))
+		return err("invalid arguments supplied to 'len'", args);
+	args = car(args);
+	if (astring(args))
+		return new_num((double)strlen(stringval(args)));
+	if (alist(args)) {
+		int count;
+		for (count = 0; !no(args); args = cdr(args), count++);
+		return new_num((double)count);
+	}
+	return err("invalid argument supplied to 'len'", args);
 }
 
 atom arc_load_file(const char *path) {
@@ -813,6 +827,8 @@ void arc_init() {
 		"Creates a new symbol from the provided string."));
 	env_assign(root, intern("string"), new_builtin(prim_string,
 		"Creates a new string from the concatenated string representations of each supplied argument."));
+	env_assign(root, intern("len"), new_builtin(prim_len,
+		"Calculates the length of the supplied list or string."));
 	env_assign(root, intern("stdin"), new_input(stdin));
 	env_assign(root, intern("stdout"), new_output(stdout));
 	env_assign(root, intern("stderr"), new_output(stderr));
