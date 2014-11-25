@@ -124,7 +124,30 @@ atom cons(atom car, atom cdr) {
 	return result;
 }
 
+char **split_string(char *a_str, const char a_delim) {
+	int count = 0;
+	char **result = 0;
+	char *last_delim = 0;
+	char delim[] = { a_delim, 0 };
+	for (char *c = a_str; *c; c++)
+		if (a_delim == *c) { count++; last_delim = c; }
+	count += last_delim < (a_str + strlen(a_str) - 1);
+	count++;
+	result = (char **)malloc(sizeof(char *) * count);
+	if (result) {
+		int i = 0;
+		for (char *token = strtok(a_str, delim); token; token = strtok(0, delim))
+			*(result + i++) = strdup(token);
+		*(result + i) = 0;
+	}
+	return result;
+}
+
 atom intern(const char *sym) {
+	if (sym[0] != '.' && sym[strlen(sym) - 1] != '.' && strchr(sym, '.') != NULL) {
+    	char **syms = split_string(sym, '.');
+    	return cons(intern(syms[0]), cons(intern(syms[1]), nil));
+    }
 	for (atom p = syms; !no(p); p = cdr(p))
 		if (!strcmp(sym, symname(car(p))))
 			return car(p);
@@ -695,6 +718,20 @@ atom prim_str(atom args) {
 	return new_str(buf);
 }
 
+atom prim_apply(atom args) {
+	if (no(args)) return err("invalid arguments supplied to apply", args);
+	if (asym(car(args)))
+		car(args) = eval(car(args), root);
+	if (iserr(car(args))) return car(args);
+	return apply(car(args), cdr(args), root);
+}
+
+atom prim_eval(atom args) {
+	if (no(args) || !no(cdr(args)))
+		return err("invalid arguments supplied to eval", args);
+	return eval(car(args), root);
+}
+
 atom arc_load_file(const char *path) {
 	printf("loading \"%s\"...\n", path);
 	FILE *stream = fopen(path, "r+");
@@ -726,6 +763,10 @@ void arc_init() {
 		"Creates an exception which takes a message string and a context."));
 	env_assign(root, intern("help"), new_builtin(prim_help,
 		"Gets the help string of an atom if available."));
+	env_assign(root, intern("apply"), new_builtin(prim_apply,
+		"Applies the supplied arguments to the function."));
+	env_assign(root, intern("eval"), new_builtin(prim_eval,
+		"Evaluates the supplied argument."));
 	env_assign(root, intern("+"), new_builtin(prim_add,
 		"Calculates the incremental sum of the supplied numbers."));
 	env_assign(root, intern("-"), new_builtin(prim_sub,
