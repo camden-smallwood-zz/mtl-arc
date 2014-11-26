@@ -213,11 +213,11 @@ For example, this is always true:
   ((compose f g h) a b c) <=> (f (g (h a b c))).
 Be wary of passing macros to compose."
   (w/uniq g
-    `(fn ,g
+    `(fn (,g)
        ,(loop (fs args)
           (if cdr.fs
             (list car.fs (recur cdr.fs))
-            `(apply ,(if car.fs car.fs 'idfn) ,g))))))
+            `(,(if car.fs car.fs 'idfn) ,g))))))
 
 (def complement (f)
 "Returns a function that behaves as if the result of calling 'f' was negated.
