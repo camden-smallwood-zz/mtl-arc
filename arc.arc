@@ -206,6 +206,25 @@ For example, this prints numbers ad infinitum:
     `((rfn recur ,(map1 car w) ,@body)
         ,@(map1 cadr w))))
 
+(mac compose args
+"Takes a list of functions and returns a function that behaves as if all its
+'args' were called in sequence.
+For example, this is always true:
+  ((compose f g h) a b c) <=> (f (g (h a b c))).
+Be wary of passing macros to compose."
+  (w/uniq g
+    `(fn ,g
+       ,(loop (fs args)
+          (if cdr.fs
+            (list car.fs (recur cdr.fs))
+            `(apply ,(if car.fs car.fs 'idfn) ,g))))))
+
+(def complement (f)
+"Returns a function that behaves as if the result of calling 'f' was negated.
+For example, this is always true:
+  ((complement f) a b) <=> (no (f a b))"
+  (fn args (no (apply f args))))
+
 (def rev (xs)
 "Returns a list containing the elements of 'xs' back to front."
   (loop (xs xs acc nil)
