@@ -21,7 +21,9 @@ Syntax Sugar:
 * Quotaton: ``` 'a-symbol => (quote a-symbol) ```
 * Quasiquotation: ``` `(list ,elem ,@elems) ```
 * Dotted: ``` car.x => (car x) ```
-* Brackets: ``` [+ _ 1] => (fn (_) (+ _ 1)) ```
+* Anonymous Functions: ``` [+ _ 1] => (fn (_) (+ _ 1)) ```
+* Composition: ``` (car:cdr x) => (car (cdr x)) ```
+* Complements: ``` (~acons nil) => (no (acons nil)) ```
 
 Special Forms:
 ==============
@@ -33,4 +35,4 @@ Builtin Functions:
 
 Defined Functions:
 ==================
-```=, def, list, prn, no, append, quasiquote, isa, isnt, caar, cadr, cdar, cddr, do, when, unless, and, or, acons, alist, idfn, map1, pair, assoc, alref, map, join, with, let, withs, ret, uniq, w/uniq, do1, rfn, afn, loop, rev, in, atom, iso, reclist, recstring, testify```
+```=, def, list, prn, no, append, quasiquote, isa, isnt, caar, cadr, cdar, cddr, do, when, unless, and, or, acons, alist, idfn, map1, pair, assoc, alref, map, join, with, let, withs, ret, uniq, w/uniq, do1, rfn, afn, loop, compose, complement, rev, in, atom, iso, reclist, recstring, testify```
