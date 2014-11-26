@@ -835,6 +835,13 @@ atom prim_trunc(atom args) {
 	return new_num(trunc(numval(car(args))));
 }
 
+atom prim_shl(atom args) {
+	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !anum(car(args)) || !anum(cadr(args)))
+		return err("invalid arguments supplied to 'shl'", args);
+	return new_num((double)((long long)numval(car(args)) <<
+	                        (long long)numval(cadr(args))));
+}
+
 atom prim_pr(atom args) {
 	for (; !no(args); args = cdr(args)) {
 		if (astring(car(args))) {
@@ -1061,6 +1068,8 @@ void arc_init() {
 	env_assign(root, intern("sqrt"), new_builtin(prim_sqrt, ""));
 	env_assign(root, intern("tan"), new_builtin(prim_tan, ""));
 	env_assign(root, intern("trunc"), new_builtin(prim_trunc, ""));
+	env_assign(root, intern("shl"), new_builtin(prim_shl,
+		"Shifts the binary twos-complement representation of 'n' left by 'm' bits."));
 	env_assign(root, intern("pr"), new_builtin(prim_pr,
 		"Prints each supplied atom to the stdout stream."));
 	env_assign(root, intern("table"), new_builtin(table,
