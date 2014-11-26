@@ -315,6 +315,15 @@ Generalizes [[map1]] to functions with more than one argument."
           (cons (apply f (map1 car seqs))
                 (apply map f (map1 cdr seqs))))))
 
+(def mappend (f . args)
+"Like [[map]] followed by append."
+  (let result nil
+    (while args
+      (let arg car.args
+        (= result (append result (join nil (map f arg)))))
+      (= args cdr.args))
+    result))
+
 (def subst (old new seq)
 "Returns a copy of 'seq' with all values of 'old' replaced with 'new'."
   (map [if (testify.old _)
