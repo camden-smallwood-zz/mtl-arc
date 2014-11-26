@@ -24,6 +24,7 @@ Syntax Sugar:
 * Anonymous Functions: ``` [+ _ 1] => (fn (_) (+ _ 1)) ```
 * Composition: ``` (car:cdr x) => (car (cdr x)) ```
 * Complements: ``` (~acons nil) => (no (acons nil)) ```
+* Variable Negation: ``` (let x 3 -x) => -3 ```
 
 Special Forms:
 ==============
