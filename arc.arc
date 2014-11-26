@@ -573,3 +573,35 @@ a list of the results."
     `(accum ,gacc
        (whiler ,gres ,expr ,eos
          (,gacc ,gres)))))
+
+(def consif (x xs)
+"Like [[cons]] on 'x' and 'xs' unless 'x' is nil."
+  (if x (cons x xs) xs))
+
+(def flat x
+"Flattens a list of lists."
+  (loop (x x acc nil)
+    (if no.x acc
+        (~acons x)
+          (cons x acc)
+        (recur car.x (recur cdr.x acc)))))
+
+(def pos (test seq (o start 0))
+"Returns the index of the first element of 'seq' matching 'test', starting
+from index 'start' (0 by default)."
+  (if (isa seq 'string)
+    (recstring [if (f (seq _)) _] seq start)
+    (let f testify.test
+      (loop (seq (nthcdr start seq)
+             n start)
+        (if no.seq nil
+            (f car.seq) n
+            (recur cdr.seq (+ n 1)))))))
+
+(def even (n)
+"Is n even?"
+  (is (mod n 2) 0))
+
+(def odd (n)
+"Is n odd?"
+  (no (even n)))
