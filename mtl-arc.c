@@ -3,6 +3,7 @@
 // Copyright (C) 2014 Camden Smallwood
 
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -331,8 +332,17 @@ atom read_expr(FILE *stream) {
     } else if (token[0] == '~' && strlen(token) > 1) {
     	return cons(intern("complement"), cons(intern(&token[1]), nil));
     } else if (strlen(token) > 2) { // possible reader macro
-		if (token[0] == '#' && token[1] == '\\') // char
+		if (token[0] == '#' && token[1] == '\\') { // char
 			return new_char(strchar(token));
+		} else if (token[0] != '/' && // ratio
+		           token[strlen(token) - 1] != '/' &&
+		           strchr(token, '/') != NULL) {
+			char **nums = split_string(token, '/');
+			if (!(nums[0][strspn(nums[0], "0123456789")] == '\0') ||
+			    !(nums[1][strspn(nums[1], "0123456789")] == '\0'))
+				return intern(token);
+			return new_num(atof(nums[0]) / atof(nums[1]));
+		}
 	}
 	return intern(token);
 }
@@ -885,6 +895,12 @@ atom prim_mod(atom args) {
 	                        (long long)numval(cadr(args))));
 }
 
+atom prim_trunc(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'trunc'", args);
+	return new_num(trunc(numval(car(args))));
+}
+
 void arc_init() {
 	nil = new_sym("nil");
 	syms = cons(nil, nil);
@@ -947,6 +963,7 @@ void arc_init() {
 	env_assign(root, intern("load"), new_builtin(prim_load,
 		"Loads a file into the root environment."));
 	env_assign(root, intern("mod"), new_builtin(prim_mod, ""));
+	env_assign(root, intern("trunc"), new_builtin(prim_trunc, ""));
 	arc_load_file("arc.arc");
 }
 
