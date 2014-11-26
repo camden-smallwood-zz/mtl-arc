@@ -89,8 +89,13 @@ atom new_num(const double num) {
 }
 
 atom new_sym(const char *sym) {
-	if (strchr(sym, ' ') != NULL)
-		return err("sym names may not contain spaces", nil);
+	if (strchr(sym, ' ') != NULL ||
+	    strchr(sym, '\t') != NULL ||
+	    strchr(sym, '\r') != NULL ||
+	    strchr(sym, '\n') != NULL)
+		return err("sym names may not contain whitespace characters", nil);
+	if (sym[strspn(sym, "0123456789")] == '\0')
+		return err("sym names may not consist of only numbers", nil);
 	atom result = make(type_sym);
 	symname(result) = strdup(sym);
 	return result;
@@ -337,11 +342,13 @@ atom read_expr(FILE *stream) {
 		} else if (token[0] != '/' && // ratio
 		           token[strlen(token) - 1] != '/' &&
 		           strchr(token, '/') != NULL) {
-			char **nums = split_string(token, '/');
+			char **nums = split_string(strdup(token), '/');
 			if (!(nums[0][strspn(nums[0], "0123456789")] == '\0') ||
 			    !(nums[1][strspn(nums[1], "0123456789")] == '\0'))
 				return intern(token);
-			return new_num(atof(nums[0]) / atof(nums[1]));
+			return cons(intern("/"),
+			            cons(new_num(atof(nums[0])),
+			                 cons(new_num(atof(nums[1])), nil)));
 		}
 	}
 	return intern(token);
@@ -646,6 +653,26 @@ atom eval(atom expr, atom env) {
 	}
 }
 
+atom prim_cons(atom args) {
+	if (no(args) || no(cdr(args)) || !no(cddr(args)))
+		return err("invalid arguments supplied to cons", args);
+	return cons(car(args), cadr(args));
+}
+
+atom prim_car(atom args) {
+	if (no(args) || !no(cdr(args)))
+		return err("invalid arguments supplied to car", args);
+	if (car(args) == nil) return nil;
+	return caar(args);
+}
+
+atom prim_cdr(atom args) {
+	if (no(args) || !no(cdr(args)))
+		return err("invalid arguments supplied to cdr", args);
+	if (car(args) == nil) return nil;
+	return cdar(args);
+}
+
 atom prim_type(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to 'type'", args);
@@ -749,6 +776,65 @@ atom prim_gt(atom args) {
 	return nil;
 }
 
+atom prim_cos(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'cos'", args);
+	return new_num(sin(numval(car(args))));
+}
+
+atom prim_expt(atom args) {
+	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !anum(car(args)) || !anum(cadr(args)))
+		return err("invalid arguments supplied to 'expt'", args);
+	return new_num(pow(numval(car(args)), numval(cadr(args))));
+}
+
+atom prim_log(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'log'", args);
+	return new_num(log(numval(car(args))));
+}
+
+atom prim_mod(atom args) {
+	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !anum(car(args)) || !anum(cadr(args)))
+		return err("invalid arguments supplied to 'mod'", args);
+	return new_num((double)((long long)numval(car(args)) %
+	                        (long long)numval(cadr(args))));
+}
+
+#define double_rand() ((double)rand() / ((double)RAND_MAX + 1.0))
+
+atom prim_rand(atom args) {
+	if (no(args))
+		return new_num(double_rand());
+	else if (!no(args) && no(cdr(args)) && anum(car(args)))
+		return new_num(floor(double_rand() * numval(car(args))));;
+	return err("invalid arguments supplied to 'rand'", args);
+}
+
+atom prim_sin(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'sin'", args);
+	return new_num(sin(numval(car(args))));
+}
+
+atom prim_sqrt(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'sqrt'", args);
+	return new_num(sqrt(numval(car(args))));
+}
+
+atom prim_tan(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'tan'", args);
+	return new_num(tan(numval(car(args))));
+}
+
+atom prim_trunc(atom args) {
+	if (no(args) || !no(cdr(args)) || !anum(car(args)))
+		return err("invalid arguments supplied to 'trunc'", args);
+	return new_num(trunc(numval(car(args))));
+}
+
 atom prim_pr(atom args) {
 	for (; !no(args); args = cdr(args)) {
 		if (astring(car(args))) {
@@ -762,50 +848,24 @@ atom prim_pr(atom args) {
 	return nil;
 }
 
-atom prim_cons(atom args) {
-	if (no(args) || no(cdr(args)) || !no(cddr(args)))
-		return err("invalid arguments supplied to cons", args);
-	return cons(car(args), cadr(args));
-}
-
-atom prim_car(atom args) {
-	if (no(args) || !no(cdr(args)))
-		return err("invalid arguments supplied to car", args);
-	if (car(args) == nil) return nil;
-	return caar(args);
-}
-
-atom prim_cdr(atom args) {
-	if (no(args) || !no(cdr(args)))
-		return err("invalid arguments supplied to cdr", args);
-	if (car(args) == nil) return nil;
-	return cdar(args);
-}
-
-atom prim_sym(atom args) {
-	if ((no(args) || !no(cdr(args))) || !astring(car(args)))
-		return err("invalid arguments supplied to 'sym'", args);
-	return intern(stringval(car(args)));
-}
-
-atom prim_num(atom args) {
-	if ((no(args) || !no(cdr(args))) || !astring(car(args)))
-		return err("invalid arguments supplied to 'num'", args);
-	return new_num(atof(stringval(car(args))));
-}
-
 atom prim_string(atom args) {
 	if (no(args))
 		return err("invalid arguments supplied to 'string'", args);
 	char buf[1024];
 	memset(buf, 0, sizeof(buf));
 	for (; !no(args); args = cdr(args)) {
-		switch (type(car(args))) {
-			case type_num: sprintf(buf, "%s%g", buf, numval(car(args))); break;
-			case type_sym: sprintf(buf, "%s%s", buf, symname(car(args))); break;
-			case type_string: sprintf(buf, "%s%s", buf, stringval(car(args))); break;
-			case type_char: sprintf(buf, "%s%c", buf, charval(car(args))); break;
-			default: return err("no string representation available", car(args));
+		if (alist(car(args))) {
+			atom val = prim_string(car(args));
+			if (iserr(val)) return val;
+			sprintf(buf, "%s%s", buf, stringval(val));
+		} else {
+			switch (type(car(args))) {
+				case type_num: sprintf(buf, "%s%g", buf, numval(car(args))); break;
+				case type_sym: sprintf(buf, "%s%s", buf, symname(car(args))); break;
+				case type_string: sprintf(buf, "%s%s", buf, stringval(car(args))); break;
+				case type_char: sprintf(buf, "%s%c", buf, charval(car(args))); break;
+				default: return err("can't coerce to 'string'", car(args));
+			}
 		}
 	}
 	return new_string(buf);
@@ -827,6 +887,67 @@ atom prim_newstring(atom args) {
 		val[i] = charval(value);
 	val[size + 1] = '\0';
 	return new_string(val);
+}
+
+atom coerce_num(atom val) {
+	if (no(val))
+		return new_num(0);
+	if (anum(val))
+		return val;
+	if (asym(val) || astring(val))
+		return new_num(atof(val->sym));
+	if (achar(val))
+		return new_num((double)charval(val));
+	return err("can't coerce to 'num'", val);
+}
+
+atom coerce_sym(atom val) {
+	if (no(val) || asym(val))
+		return val;
+	if (astring(val))
+		return intern(stringval(val));
+	if (achar(val)) {
+		char buf[] = { charval(val), '\0' };
+		return intern(buf);
+	}
+	return err("can't coerce to 'sym'", val);
+}
+
+atom coerce_char(atom val) {
+	return err("can't coerce to 'char'", val);
+}
+
+atom coerce_cons(atom val) {
+	if (astring(val)) {
+		atom result = nil;
+		for (int i = strlen(stringval(val)) - 1; i != -1; i--)
+			result = cons(new_char(stringval(val)[i]), result);
+		return result;
+	}
+	return err("can't coerce to 'cons'", val);
+}
+
+atom coerce_table(atom val) {
+	return err("can't coerce to 'table'", val);
+}
+
+atom prim_coerce(atom args) {
+	if (no(args) || no(cdr(args)) || !asym(cadr(args)))
+		return err("invalid arguments supplied to 'sym'", args);
+	atom val = car(args), type = cadr(args);
+	if (type == intern("num"))
+		return coerce_num(val);
+	else if (type == intern("sym"))
+		return coerce_sym(val);
+	else if (type == intern("string"))
+		return prim_string(cons(val, nil));
+	else if (type == intern("char"))
+		return coerce_char(val);
+	else if (type == intern("cons") || type == intern("list"))
+		return coerce_cons(val);
+	else if (type == intern("table"))
+		return coerce_table(val);
+	return err("can't coerce to type", type);
 }
 
 atom prim_apply(atom args) {
@@ -888,19 +1009,6 @@ atom prim_load(atom args) {
 	return arc_load_file(stringval(car(args)));
 }
 
-atom prim_mod(atom args) {
-	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !anum(car(args)) || !anum(cadr(args)))
-		return err("invalid arguments supplied to 'mod'", args);
-	return new_num((double)((long long)numval(car(args)) %
-	                        (long long)numval(cadr(args))));
-}
-
-atom prim_trunc(atom args) {
-	if (no(args) || !no(cdr(args)) || !anum(car(args)))
-		return err("invalid arguments supplied to 'trunc'", args);
-	return new_num(trunc(numval(car(args))));
-}
-
 void arc_init() {
 	nil = new_sym("nil");
 	syms = cons(nil, nil);
@@ -916,6 +1024,12 @@ void arc_init() {
 	sym_fn = intern("fn");
 	sym_mac = intern("mac");
 	env_assign(root, t = intern("t"), t);
+	env_assign(root, intern("cons"), new_builtin(prim_cons,
+		"Constructs a pair of atoms (cons) from the provided first (car) and rest (cdr) atoms."));
+	env_assign(root, intern("car"), new_builtin(prim_car,
+		"Gets the first (car) of a pair of atoms (cons)."));
+	env_assign(root, intern("cdr"), new_builtin(prim_cdr,
+		"Gets the rest (cdr) of a pair of atoms (cons)."));
 	env_assign(root, intern("type"), new_builtin(prim_type,
 		"Gets the type of an atom."));
 	env_assign(root, intern("err"), new_builtin(prim_err,
@@ -938,23 +1052,22 @@ void arc_init() {
 		"Checks to see if each number is less than the next provided number."));
 	env_assign(root, intern(">"), new_builtin(prim_gt,
 		"Checks to see if each number is greater than the next provided number."));
+	env_assign(root, intern("cos"), new_builtin(prim_cos, ""));
+	env_assign(root, intern("expt"), new_builtin(prim_expt, ""));
+	env_assign(root, intern("log"), new_builtin(prim_log, ""));
+	env_assign(root, intern("mod"), new_builtin(prim_mod, ""));
+	env_assign(root, intern("rand"), new_builtin(prim_rand, ""));
+	env_assign(root, intern("sin"), new_builtin(prim_sin, ""));
+	env_assign(root, intern("sqrt"), new_builtin(prim_sqrt, ""));
+	env_assign(root, intern("tan"), new_builtin(prim_tan, ""));
+	env_assign(root, intern("trunc"), new_builtin(prim_trunc, ""));
 	env_assign(root, intern("pr"), new_builtin(prim_pr,
 		"Prints each supplied atom to the stdout stream."));
-	env_assign(root, intern("cons"), new_builtin(prim_cons,
-		"Constructs a pair of atoms (cons) from the provided first (car) and rest (cdr) atoms."));
-	env_assign(root, intern("car"), new_builtin(prim_car,
-		"Gets the first (car) of a pair of atoms (cons)."));
-	env_assign(root, intern("cdr"), new_builtin(prim_cdr,
-		"Gets the rest (cdr) of a pair of atoms (cons)."));
 	env_assign(root, intern("table"), new_builtin(table,
 		"Creates a new table, optionally taking each two supplied arguments as a key/value pair."));
-	env_assign(root, intern("num"), new_builtin(prim_num,
-		"Creates a new number from the provided string."));
-	env_assign(root, intern("sym"), new_builtin(prim_sym,
-		"Creates a new symbol from the provided string."));
-	env_assign(root, intern("string"), new_builtin(prim_string,
-		"Creates a new string from the concatenated string representations of each supplied argument."));
+	env_assign(root, intern("string"), new_builtin(prim_string, ""));
 	env_assign(root, intern("newstring"), new_builtin(prim_newstring, ""));
+	env_assign(root, intern("coerce"), new_builtin(prim_coerce, ""));
 	env_assign(root, intern("len"), new_builtin(prim_len,
 		"Calculates the length of the supplied list or string."));
 	env_assign(root, intern("stdin"), new_builtin(prim_stdin, ""));
@@ -962,8 +1075,6 @@ void arc_init() {
 	env_assign(root, intern("stderr"), new_builtin(prim_stderr, ""));
 	env_assign(root, intern("load"), new_builtin(prim_load,
 		"Loads a file into the root environment."));
-	env_assign(root, intern("mod"), new_builtin(prim_mod, ""));
-	env_assign(root, intern("trunc"), new_builtin(prim_trunc, ""));
 	arc_load_file("arc.arc");
 }
 
