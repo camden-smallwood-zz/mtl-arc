@@ -298,6 +298,16 @@ This is the most reliable way to check for presence, even when searching for nil
   (let f (testify test)
     (reclist [if (f:carif _) _] seq)))
 
+(mac as (type expr)
+"Tries to convert 'expr' into a different 'type'.
+More convenient form of [[coerce]] with arguments reversed; doesn't need
+'type' to be quoted."
+  `(coerce ,expr ',type))
+
+(def sym (x)
+"Converts 'x' into a symbol."
+  (coerce x 'sym))
+
 (def map (f . seqs)
 "Successively applies corresponding elements of 'seqs' to function 'f'.
 Generalizes [[map1]] to functions with more than one argument."
@@ -508,15 +518,14 @@ negative to count backwards from the end."
 
 (def rem (test seq)
 "Returns all elements of 'seq' except those satisfying 'test'."
-; TODO: make 'as'
-;  (if (isa seq 'string)
-;        (as string (rem test (as cons seq)))))
-  (let f testify.test
-    (loop (s seq)
-      (if no.s nil
-          (f car.s)
-            (recur cdr.s)
-          (cons car.s (recur cdr.s))))))
+  (if (isa seq 'string)
+        (as string (rem test (as cons seq)))
+      (let f testify.test
+        (loop (s seq)
+          (if no.s nil
+              (f car.s)
+                (recur cdr.s)
+              (cons car.s (recur cdr.s)))))))
 
 (def keep (test seq)
 "Returns all elements of 'seq' for which 'test' passes."
@@ -684,3 +693,72 @@ by args passed in, so that future calls with the same inputs can save work."
 (mac defmemo (name parms . body)
 "Like [[def]] but defines a memoized function. See [[memo]]."
   `(assign ,name (memo (fn ,parms ,@body))))
+
+(def prall (elts (o init "") (o sep ", "))
+"Prints elements of list 'elts' prefixed with 'init' and separated by 'sep'.
+Returns 'elts'."
+  (when elts
+    (pr init car.elts)
+    (each e cdr.elts
+      (pr sep e))
+    elts))
+
+(def prs args
+"Prints elements of list 'args' separated by spaces."
+  (prall args "" #\space))
+
+(def copy (x)
+"Creates a deep copy of 'x'. Future changes to any part of 'x' are guaranteed
+to be isolated from the copy."
+  (if (isa x 'string)
+        (ret new (newstring len.x)
+          (forlen i x
+            (= new.i x.i)))
+      atom.x x
+      (cons (copy car.x) (copy cdr.x))))
+
+; implement later
+;(defextend copy (x . args) (isa x 'table)
+;  (ret new (table)
+;    (each (k v) x
+;      (= new.k copy.v))
+;    (each (k v) pair.args
+;      (= new.k v))))
+
+(def abs (n)
+"Returns the absolute value of 'n'."
+  (if (< n 0) (- n) n))
+
+(def round (n)
+"Approximates a fractional value to the nearest integer.
+Exact halves are rounded down to the lower integer.
+Negative numbers are always treated exactly like their positive variants
+barring the sign."
+  (withs (base (trunc n)
+          rem (abs (- n base)))
+    (if (> rem 1/2)
+          ((if (> n 0) + -) base 1)
+        (< rem 1/2)
+          base
+        (odd base)
+          ((if (> n 0) + -) base 1)
+        base)))
+
+(def roundup (n)
+"Like [[round]] but halves are rounded up rather than down."
+  (withs (base (trunc n) rem (abs (- n base)))
+    (if (>= rem 1/2)
+      ((if (> n 0) + -) base 1)
+      base)))
+
+(def nearest (n quantum)
+"Like [[round]] but generalized to arbitrary units."
+  (* (roundup (/ n quantum)) quantum))
+
+(def avg (ns)
+"Returns the arithmetic mean of a list of numbers 'ns'."
+  (/ (apply + ns) len.ns))
+
+(def med (ns (o test >))
+"Returns the median of a list of numbers 'ns' according to the comparison 'test'."
+  ((sort test ns) (round (/ len.ns 2))))
