@@ -217,8 +217,9 @@ atom env_assign_eq(atom env, atom sym, atom val) {
 
 char *charstr(const char value) {
 	if (value == '\n') return "#\\newline";
-	else if (value == '\t') return "#\\tab";
-	else if (value == ' ') return "#\\space";
+	if (value == '\r') return "#\\return";
+	if (value == '\t') return "#\\tab";
+	if (value == ' ') return "#\\space";
 	char cbuf[] = { 0, 0, 0 };
 	sprintf(cbuf, "#\\%c", value);
 	return strdup(cbuf);
@@ -226,6 +227,7 @@ char *charstr(const char value) {
 
 char strchar(const char *str) {
 	if (!strcmp(str, "#\\newline")) return '\n';
+	if (!strcmp(str, "#\\return")) return '\r';
 	if (!strcmp(str, "#\\tab")) return '\t';
 	if (!strcmp(str, "#\\space")) return ' ';
 	return str[2];
@@ -240,13 +242,14 @@ char **split_string(char *a_str, const char a_delim) {
 		if (a_delim == *c) { count++; last_delim = c; }
 	count += last_delim < (a_str + strlen(a_str) - 1);
 	count++;
-	result = (char **)malloc(sizeof(char *) * count);
+	result = (char **)malloc(sizeof(char *) * (count + 1));
 	if (result) {
 		int i = 0;
 		for (char *token = strtok(a_str, delim); token; token = strtok(0, delim))
 			*(result + i++) = strdup(token);
 		*(result + i) = 0;
 	}
+	result[count + 1] = NULL;
 	return result;
 }
 
@@ -335,8 +338,12 @@ atom read_expr(FILE *stream) {
     } else if (token[0] != ':' &&
 	           token[strlen(token) - 1] != ':' &&
 	           strchr(token, ':') != NULL) {
-    	char **syms = split_string(token, ':');
-    	return cons(intern("compose"), cons(intern(syms[0]), cons(intern(syms[1]), nil)));
+		char **syms = split_string(token, ':');
+		atom dims = nil, comps = nil;
+		for (int i = 0; syms[i] != NULL; i++)
+			dims = cons(intern(syms[i]), dims);
+		for (; !no(dims); comps = cons(car(dims), comps), dims = cdr(dims));
+		return cons(intern("compose"), comps);
     } else if (token[0] == '~' && strlen(token) > 1) {
     	return cons(intern("complement"), cons(intern(&token[1]), nil));
     } else if (strlen(token) > 2) { // possible reader macro
