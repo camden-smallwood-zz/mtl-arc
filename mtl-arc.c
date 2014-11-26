@@ -319,7 +319,10 @@ atom read_expr(FILE *stream) {
 		if (!strcmp(token, "-") || !strcmp(token, "."))
 			return intern(token);
 		return new_num(atof(token));
-	} else if (token[0] != '.' &&
+	} else if (token[0] == '-' && strlen(token) > 1) {
+		puts("yup");
+    	return cons(intern("-"), cons(intern(&token[1]), nil));
+    } else if (token[0] != '.' &&
 	           token[strlen(token) - 1] != '.' &&
 	           strchr(token, '.') != NULL) {
     	char **syms = split_string(token, '.');
@@ -731,7 +734,7 @@ atom prim_sub(atom args) {
 		for (atom p = args; !no(p); p = cdr(p))
 			if (!anum(car(p)))
 				return err("invalid arguments supplied to -", args);
-	double sum = numval(car(args));
+	double sum = no(cdr(args)) ? -numval(car(args)) : numval(car(args));
 	for(args = cdr(args); !no(args); sum -= numval(car(args)), args = cdr(args));
 	return new_num(sum);
 }
