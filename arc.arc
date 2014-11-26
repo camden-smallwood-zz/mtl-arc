@@ -725,6 +725,10 @@ to be isolated from the copy."
 ;    (each (k v) pair.args
 ;      (= new.k v))))
 
+(def shr (n m)
+"Shifts the binary twos-complement representation of 'n' right by 'm' bits."
+  (shl n (- m)))
+
 (def abs (n)
 "Returns the absolute value of 'n'."
   (if (< n 0) (- n) n))
