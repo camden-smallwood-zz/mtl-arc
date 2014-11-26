@@ -801,6 +801,24 @@ atom prim_string(atom args) {
 	return new_string(buf);
 }
 
+atom prim_newstring(atom args) {
+	if (no(args) || !anum(car(args)))
+		return err("invalid arguments supplied to 'newstring'", args);
+	atom value = new_char(' ');
+	if (!no(cdr(args))) {
+		if (!achar(cadr(args)))
+			return err("invalid arguments supplied to 'newstring'", args);
+		value = cadr(args);
+	}
+	int size = (int)numval(car(args));
+	char *val = malloc(size + 1);
+	memset(val, 0, size + 1);
+	for (int i = 0; i < size; i++)
+		val[i] = charval(value);
+	val[size + 1] = '\0';
+	return new_string(val);
+}
+
 atom prim_apply(atom args) {
 	if (no(args)) return err("invalid arguments supplied to apply", args);
 	return apply(car(args), cdr(args));
@@ -860,6 +878,13 @@ atom prim_load(atom args) {
 	return arc_load_file(stringval(car(args)));
 }
 
+atom prim_mod(atom args) {
+	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !anum(car(args)) || !anum(cadr(args)))
+		return err("invalid arguments supplied to 'mod'", args);
+	return new_num((double)((long long)numval(car(args)) %
+	                        (long long)numval(cadr(args))));
+}
+
 void arc_init() {
 	nil = new_sym("nil");
 	syms = cons(nil, nil);
@@ -913,6 +938,7 @@ void arc_init() {
 		"Creates a new symbol from the provided string."));
 	env_assign(root, intern("string"), new_builtin(prim_string,
 		"Creates a new string from the concatenated string representations of each supplied argument."));
+	env_assign(root, intern("newstring"), new_builtin(prim_newstring, ""));
 	env_assign(root, intern("len"), new_builtin(prim_len,
 		"Calculates the length of the supplied list or string."));
 	env_assign(root, intern("stdin"), new_builtin(prim_stdin, ""));
@@ -920,6 +946,7 @@ void arc_init() {
 	env_assign(root, intern("stderr"), new_builtin(prim_stderr, ""));
 	env_assign(root, intern("load"), new_builtin(prim_load,
 		"Loads a file into the root environment."));
+	env_assign(root, intern("mod"), new_builtin(prim_mod, ""));
 	arc_load_file("arc.arc");
 }
 
