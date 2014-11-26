@@ -116,15 +116,6 @@ function 'f' to them."
 "Returns the value of 'key' in an association list 'al' of (key value) pairs"
   (cadr (assoc key al)))
 
-(def map (f . seqs)
-"Successively applies corresponding elements of 'seqs' to function 'f'.
-Generalizes [[map1]] to functions with more than one argument."
-  (if (no cdr.seqs)
-        (map1 f car.seqs)
-      (all idfn seqs)
-        (cons (apply f (map1 car seqs))
-              (apply map f (map1 cdr seqs)))))
-
 (def join args
   (let result nil
     (while args
@@ -266,3 +257,319 @@ the same elements (be *isomorphic*) without being identical."
 (def testify (x)
 "Turns an arbitrary value 'x' into a predicate function to compare with 'x'."
   (if (isa x 'fn) x [iso _ x]))
+
+(def carif (x)
+"Returns the first element of the given list 'x', or just 'x' if it isn't a list."
+  (if acons.x car.x x))
+
+(def some (test seq)
+"Does at least one element of 'seq' satisfy 'test'?"
+  (let f testify.test
+    (reclist f:carif seq)))
+
+(def all (test seq)
+"Does every element of 'seq' satisfy 'test'?"
+  (~some (complement (testify test)) seq))
+
+(mac check (x test (o alt))
+"Returns `x' if it satisfies `test', otherwise returns 'alt' (nil if it's not provided)."
+  (w/uniq gx
+    `(let ,gx ,x
+       (if (,test ,gx) ,gx ,alt))))
+
+(mac acheck (x test (o alt))
+"Like [[check]], but 'alt' can refer to the value of expr 'x' as 'it.
+Pronounced 'anaphoric check'."
+  `(let it ,x
+     (if (,test it)
+       it
+       ,alt)))
+
+(def find (test seq)
+"Returns the first element of 'seq' that satisfies `test'."
+  (let f testify.test
+    (if (isa seq 'string)
+      (recstring [check seq._ f] seq)
+      (reclist [check carif._ f] seq))))
+
+(def mem (test seq)
+"Returns suffix of 'seq' after the first element to satisfy 'test'.
+This is the most reliable way to check for presence, even when searching for nil."
+  (let f (testify test)
+    (reclist [if (f:carif _) _] seq)))
+
+(def map (f . seqs)
+"Successively applies corresponding elements of 'seqs' to function 'f'.
+Generalizes [[map1]] to functions with more than one argument."
+  (if (some [isa _ 'string] seqs)
+    (withs (n (apply min (map1 len seqs))
+            new (newstring n))
+      (loop (i 0)
+        (if (is i n)
+          new
+          (do (sref new (apply f (map1 [_ i] seqs)) i)
+              (recur (+ i 1))))))
+    (if (no cdr.seqs)
+          (map1 f car.seqs)
+        (all idfn seqs)
+          (cons (apply f (map1 car seqs))
+                (apply map f (map1 cdr seqs))))))
+
+(def subst (old new seq)
+"Returns a copy of 'seq' with all values of 'old' replaced with 'new'."
+  (map [if (testify.old _)
+           (if (isa new 'fn) new._ new)
+           _] seq))
+
+(def firstn (n xs)
+"Returns the first 'n' elements of 'xs'."
+  (if no.n xs
+      (and (> n 0) xs)
+        (cons car.xs (firstn (- n 1) cdr.xs))
+      nil))
+
+(def lastn (n xs)
+"Returns the last 'n' elements of 'xs'."
+  (rev:firstn n rev.xs))
+
+(def nthcdr (n xs)
+"Returns all but the first 'n' elements of 'xs'."
+  (if no.n xs
+      (> n 0)
+        (nthcdr (- n 1) cdr.xs)
+      xs))
+
+(def lastcons (xs)
+"Returns the absolute last link of list 'xs'. Save this value to efficiently
+append to 'xs'."
+  (if cdr.xs
+    (lastcons cdr.xs)
+    xs))
+
+(def tuples (xs (o n 2))
+"Splits 'xs' up into lists of size 'n'. Generalization of [[pair]]."
+  (if (no xs)
+    nil
+    (cons (firstn n xs)
+          (tuples (nthcdr n xs) n))))
+
+(mac defs args
+  `(do ,@(map [cons 'def _] (tuples args 3))))
+
+(def caris (x val)
+  (and (acons x) (is (car x) val)))
+
+(def <= args
+"Is each element of 'args' lesser than or equal to all following elements?"
+  (or (no args)
+      (no (cdr args))
+      (and (no (> (car args) (cadr args)))
+           (apply <= (cdr args)))))
+
+(def >= args
+"Is each element of 'args' greater than or equal to all following elements?"
+  (or (no args)
+      (no (cdr args))
+      (and (no (< (car args) (cadr args)))
+           (apply >= (cdr args)))))
+
+(mac ++ (i)
+  `(= ,i (+ ,i 1)))
+
+(mac for (var init test update . body)
+"Loops through expressions in 'body' as long as 'test' passes, first 
+binding 'var' to 'init'. At the end of each iteration it runs 'update', 
+which usually will modify 'var'."
+  `(loop (,var ,init)
+     (when ,test
+       (do1 (do ,@body)
+         ,update
+         ,(if (acons var)
+            `(recur (list ,@var))
+            `(recur ,var))))))
+
+(mac up (v init max . body)
+"Counts 'v' up from 'init' (inclusive) to 'max' (exclusive), running 'body'
+with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
+  `(for ,v ,init (< ,v ,max) (assign ,v (+ ,v 1))
+     ,@body))
+
+(mac down (v init min . body)
+"Counts 'v' down from 'init' (inclusive) to 'min' (exclusive), running 'body'
+with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
+  `(for ,v ,init (> ,v ,min) (assign ,v (- ,v 1))
+     ,@body))
+
+(mac repeat (n . body)
+"Runs 'body' expression by expression 'n' times."
+  (w/uniq gi
+    `(up ,gi 0 ,n
+       ,@body)))
+
+(mac forlen (var s . body)
+"Loops through the length of sequence 's', binding each element to 'var'."
+  `(up ,var 0 (len ,s)
+     ,@body))
+
+(def walk (seq f)
+"Calls function 'f' on each element of 'seq'. See also [[map]]."
+  (if (isa seq 'table)
+        (maptable (fn (k v) (f (list k v))) seq)
+      (isa seq 'string)
+        (forlen i seq (f seq.i))
+      (loop (l seq)
+        (when acons.l
+          (f car.l)
+          (recur cdr.l)))))
+
+(mac each (var expr . body)
+"Loops through expressions in 'body' with 'var' bound to each successive
+element of 'expr'."
+  `(walk ,expr (fn (,var) ,@body)))
+
+(mac iflet (var expr . branches)
+"If 'expr' is not nil, binds 'var' to it before running the first branch.
+Can be given multiple alternating test expressions and branches. The first
+passing test expression is bound to 'var' before running its corresponding branch.
+For examples, see [[aif]]."
+  (if branches
+    (w/uniq gv
+      `(let ,gv ,expr
+         (if ,gv
+           (let ,var ,gv
+             ,(car branches))
+           ,(if (cdr branches)
+              `(iflet ,var ,@(cdr branches))))))
+    expr))
+
+(mac whenlet (var expr . body)
+"Like [[when]] but also puts the value of 'expr' in 'var' so 'body' can access it."
+  `(iflet ,var ,expr (do ,@body)))
+
+(mac let-or (var expr else . body)
+"Like [[iflet]] but provides an immediate escape hatch first if 'expr' is nil.
+Use let-or for [[iflet]] forms with just one test, many things to do if it
+passes, and a simple expression or error if it fails."
+  `(iflet ,var ,expr
+     (do ,@body)
+     ,else))
+
+(mac aif (expr . branches)
+"Like [[if]], but also puts the value of 'expr' in variable 'it'."
+  `(iflet it ,expr ,@branches))
+
+(mac awhen (expr . body)
+"Like [[when]], but also puts the value of 'expr' in variable 'it'."
+  `(let it ,expr (if it (do ,@body))))
+
+(mac aand args
+"Like [[and]], but each expression in 'args' can access the result of the
+previous one in variable 'it'."
+  (if no.args t
+      (no cdr.args)
+        car.args
+     `(let it ,car.args
+        (and it (aand ,@cdr.args)))))
+
+(def cut (seq start (o end))
+"Extract a chunk of 'seq' from index 'start' (inclusive) to 'end' (exclusive). 'end'
+can be left out or nil to indicate everything from 'start', and can be
+negative to count backwards from the end."
+  (if (isa seq 'string)
+    (let end (range-bounce end len.seq)
+      (ret s2 (newstring (- end start))
+        (up i 0 (- end start)
+          (= s2.i (seq (+ start i))))))
+    (firstn (- (range-bounce end len.seq) start)
+            (nthcdr start seq))))
+
+(def range-bounce (i max)
+"Munges index 'i' in slices of a sequence of length 'max'. First element starts
+ at index 0. Negative indices count from the end. A nil index denotes the end."
+  (if no.i max
+      (< i 0)
+        (+ max i)
+      (>= i max)
+        max
+      i))
+
+(def last (xs)
+"Returns the last element of 'xs'."
+  (if (cdr xs)
+    (last cdr.xs)
+    car.xs))
+
+(def rem (test seq)
+"Returns all elements of 'seq' except those satisfying 'test'."
+; TODO: make 'as'
+;  (if (isa seq 'string)
+;        (as string (rem test (as cons seq)))))
+  (let f testify.test
+    (loop (s seq)
+      (if no.s nil
+          (f car.s)
+            (recur cdr.s)
+          (cons car.s (recur cdr.s))))))
+
+(def keep (test seq)
+"Returns all elements of 'seq' for which 'test' passes."
+  (rem (complement (testify test)) seq))
+
+(def trues (f xs)
+"Returns (map f xs) dropping any nils."
+  (and xs
+       (iflet fx (f car.xs)
+         (cons fx (trues f cdr.xs))
+         (trues f cdr.xs))))
+
+(mac caselet (var expr . args)
+"Like [[case]], but 'expr' is also bound to 'var' and available inside the 'args'."
+  `(let ,var ,expr
+     ,(loop (args args)
+        (if (no cdr.args)
+          car.args
+          `(if (is ,var ',car.args)
+             ,cadr.args
+             ,(recur cddr.args))))))
+
+(mac case (expr . args)
+"Usage: (case expr test1 then1 test2 then2 ...)
+Matches 'expr' to the first satisfying 'test' and runs the corresponding 'then' branch."
+  `(caselet ,(uniq) ,expr ,@args))
+
+(mac wipe args
+"Sets each place in 'args' to nil."
+  `(do ,@(map (fn (a) `(= ,a nil)) args)))
+
+(mac set args
+"Sets each place in 'args' to t."
+  `(do ,@(map (fn (a) `(= ,a t)) args)))
+
+(mac accum (accfn . body)
+"Runs 'body' (usually containing a loop) and then returns in order all the
+values that were called with 'accfn' in the process.
+Can be cleaner than map for complex anonymous functions."
+  (w/uniq gacc
+    `(withs (,gacc nil ,accfn [push _ ,gacc])
+       ,@body
+       (rev ,gacc))))
+
+(mac forever body
+"Loops through the expressions in 'body' forever.
+May still terminate by calling '(break)'."
+  `(while t ,@body))
+
+(mac whiler (var expr end . body)
+"Repeatedly binds 'var' to 'expr' and runs 'body' until 'var' matches 'end'."
+  (w/uniq gendf
+    `(withs (,var nil ,gendf (testify ,end))
+       (while (no (,gendf (= ,var ,expr)))
+         ,@body))))
+
+(mac drain (expr (o eos nil))
+"Repeatedly evaluates 'expr' until it returns 'eos' (nil by default). Returns
+a list of the results."
+  (w/uniq (gacc gres)
+    `(accum ,gacc
+       (whiler ,gres ,expr ,eos
+         (,gacc ,gres)))))
