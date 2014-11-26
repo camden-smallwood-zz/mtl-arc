@@ -109,11 +109,11 @@ atom cons(atom car, atom cdr) {
 	return result;
 }
 
-atom intern(const char *sym) {
+atom intern(const char *token) {
 	for (atom p = syms; !no(p); p = cdr(p))
-		if (!strcmp(sym, symname(car(p))))
+		if (!strcmp(token, symname(car(p))))
 			return car(p);
-	return car(syms = cons(new_sym(sym), syms));
+	return car(syms = cons(new_sym(token), syms));
 }
 
 atom new_closure(atom args, atom body, atom env) {
@@ -318,6 +318,18 @@ atom read_expr(FILE *stream) {
 	           strchr(token, '.') != NULL) {
     	char **syms = split_string(token, '.');
     	return cons(intern(syms[0]), cons(intern(syms[1]), nil));
+    } else if (token[0] != '!' &&
+	           token[strlen(token) - 1] != '!' &&
+	           strchr(token, '!') != NULL) {
+    	char **syms = split_string(token, '!');
+    	return cons(intern(syms[0]), cons(cons(sym_quote, cons(intern(syms[1]), nil)), nil));
+    } else if (token[0] != ':' &&
+	           token[strlen(token) - 1] != ':' &&
+	           strchr(token, ':') != NULL) {
+    	char **syms = split_string(token, ':');
+    	return cons(intern("compose"), cons(intern(syms[0]), cons(intern(syms[1]), nil)));
+    } else if (token[0] == '~' && strlen(token) > 1) {
+    	return cons(intern("complement"), cons(intern(&token[1]), nil));
     } else if (strlen(token) > 2) { // possible reader macro
 		if (token[0] == '#' && token[1] == '\\') // char
 			return new_char(strchar(token));
@@ -762,13 +774,19 @@ atom prim_cdr(atom args) {
 
 atom prim_sym(atom args) {
 	if ((no(args) || !no(cdr(args))) || !astring(car(args)))
-		return err("invalid arguments supplied to sym", args);
+		return err("invalid arguments supplied to 'sym'", args);
 	return intern(stringval(car(args)));
+}
+
+atom prim_num(atom args) {
+	if ((no(args) || !no(cdr(args))) || !astring(car(args)))
+		return err("invalid arguments supplied to 'num'", args);
+	return new_num(atof(stringval(car(args))));
 }
 
 atom prim_string(atom args) {
 	if (no(args))
-		return err("invalid arguments supplied to string", args);
+		return err("invalid arguments supplied to 'string'", args);
 	char buf[1024];
 	memset(buf, 0, sizeof(buf));
 	for (; !no(args); args = cdr(args)) {
@@ -889,6 +907,8 @@ void arc_init() {
 		"Gets the rest (cdr) of a pair of atoms (cons)."));
 	env_assign(root, intern("table"), new_builtin(table,
 		"Creates a new table, optionally taking each two supplied arguments as a key/value pair."));
+	env_assign(root, intern("num"), new_builtin(prim_num,
+		"Creates a new number from the provided string."));
 	env_assign(root, intern("sym"), new_builtin(prim_sym,
 		"Creates a new symbol from the provided string."));
 	env_assign(root, intern("string"), new_builtin(prim_string,
@@ -904,7 +924,7 @@ void arc_init() {
 }
 
 int main(int argc, char **argv) {
-	puts("  mtl-arc v0.2\n================");
+	puts("  mtl-arc v0.3\n================");
 	arc_init();
 	for(;;) {
 		printf("%s", "> ");
