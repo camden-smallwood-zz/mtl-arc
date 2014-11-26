@@ -21,6 +21,7 @@ Syntax Sugar:
 * Quotaton: ``` 'a-symbol => (quote a-symbol) ```
 * Quasiquotation: ``` `(list ,elem ,@elems) ```
 * Dotted: ``` car.x => (car x) ```
+* Dotted-Quote: ``` prn!hello => (prn 'hello) ```
 * Anonymous Functions: ``` [+ _ 1] => (fn (_) (+ _ 1)) ```
 * Composition: ``` (car:cdr x) => (car (cdr x)) ```
 * Complements: ``` (~acons nil) => (no (acons nil)) ```
@@ -31,7 +32,7 @@ Special Forms:
 
 Builtin Functions:
 ==================
-```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, sym, string, len, stdin, stdout, stderr, load```
+```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, num, sym, string, len, stdin, stdout, stderr, load```
 
 Defined Functions:
 ==================
