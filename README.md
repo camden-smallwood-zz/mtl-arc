@@ -28,12 +28,32 @@ Syntax Sugar:
 
 Special Forms:
 ==============
-```quote, assign, if, is, while, fn, mac```
+```
+quote, assign, if, is, while, fn, mac
+```
 
 Builtin Functions:
 ==================
-```type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, table, num, sym, string, len, stdin, stdout, stderr, load```
+```
+type, err, help, apply, eval, +, -, *, /, <, >, pr, cons, car, cdr, 
+table, num, sym, string, newstring, len, stdin, stdout, stderr, 
+load, mod
+```
 
 Defined Functions:
 ==================
-```=, def, list, prn, no, append, quasiquote, isa, isnt, caar, cadr, cdar, cddr, do, when, unless, and, or, acons, alist, idfn, map1, pair, assoc, alref, map, join, with, let, withs, ret, uniq, w/uniq, do1, rfn, afn, loop, compose, complement, rev, in, atom, iso, reclist, recstring, testify```
+```
+=, def, list, prn, no, append, quasiquote, isa, isnt, 
+caar, cadr, cdar, cddr, do, when, unless, and, or, 
+acons, alist, idfn, map1, pair, assoc, alref, join, 
+with, let, withs, ret, uniq, w/uniq, do1, rfn, afn, loop, 
+compose, complement, rev, in, atom, iso, reclist, recstring, 
+testify, carif, some, all, check, acheck, find, mem, map, 
+mappend, subst, firstn, lastn, nthcdr, lastcons, tuples, 
+defs, caris, <=, >=, ++, for, up, down, repeat, forlen, 
+walk, each, iflet, whenlet, let-or, aif, awhen, aand, cut, 
+range-bounce, last, rem, keep, trues, caselet, case, zap, 
+wipe, set, accum, forever, whiler, drain, consif, flat, pos, 
+even, odd, on, best, max, min, most, insert-sorted, insort, 
+insortnew, memo, defmemo
+```
