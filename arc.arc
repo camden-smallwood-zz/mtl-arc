@@ -422,9 +422,7 @@ with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
 
 (def walk (seq f)
 "Calls function 'f' on each element of 'seq'. See also [[map]]."
-  (if (isa seq 'table)
-        (maptable (fn (k v) (f (list k v))) seq)
-      (isa seq 'string)
+  (if (isa seq 'string)
         (forlen i seq (f seq.i))
       (loop (l seq)
         (when acons.l
@@ -522,7 +520,7 @@ negative to count backwards from the end."
 
 (def keep (test seq)
 "Returns all elements of 'seq' for which 'test' passes."
-  (rem (complement (testify test)) seq))
+  (rem (complement testify.test) seq))
 
 (def trues (f xs)
 "Returns (map f xs) dropping any nils."
@@ -545,6 +543,10 @@ negative to count backwards from the end."
 "Usage: (case expr test1 then1 test2 then2 ...)
 Matches 'expr' to the first satisfying 'test' and runs the corresponding 'then' branch."
   `(caselet ,(uniq) ,expr ,@args))
+
+(mac zap (op place . args)
+"Replaces 'place' with (apply op place args)"
+  `(= ,place (,op ,place ,@args)))
 
 (mac wipe args
 "Sets each place in 'args' to nil."
@@ -614,3 +616,71 @@ from index 'start' (0 by default)."
 (def odd (n)
 "Is n odd?"
   (no (even n)))
+
+(mac on (var s . body)
+"Like [[each]], but also maintains a variable calles 'index' counting the iterations."
+  (if (is var 'index)
+    (err "can't use index as first arg to 'on'")
+    (w/uniq gs
+      `(let ,gs ,s
+         (forlen index ,gs
+           (let ,var (,gs index)
+             ,@body))))))
+
+(def best (f seq)
+"Maximizes comparator function 'f' throughout seq."
+  (whenlet wins carif.seq
+    (each elt cdr.seq
+      (if (f elt wins)
+        (= wins elt)))
+    wins))
+
+(def max args
+"Returns the greatest of 'args'."
+  (best > args))
+
+(def min args
+"Returns the least of 'args'."
+  (best < args))
+
+(def most (f seq)
+"Like [[best]], but function 'f' is a scorer for each element rather than a
+comparator between elements."
+  (if seq
+    (withs (wins (car seq) topscore (f wins))
+      (each elt (cdr seq)
+        (let score (f elt)
+          (if (> score topscore) (= wins elt topscore score))))
+      wins)))
+
+(def insert-sorted (test elt seq)
+"Inserts 'elt' into a sequence 'seq' that is assumed to be sorted by 'test'."
+  (if (no seq)
+        (list elt)
+      (test elt car.seq)
+        (cons elt seq)
+      (cons car.seq (insert-sorted test elt cdr.seq))))
+
+(mac insort (test elt seq)
+"Like [[insert-sorted]] but modifies 'seq' in place'."
+  `(zap [insert-sorted ,test ,elt _] ,seq))
+
+(mac insortnew (test elt seq)
+"Like [[insort]], but only inserts 'elt' if it doesn't exist."
+  `(zap [reinsert-sorted ,test ,elt _] ,seq))
+
+(def memo (f)
+"Turns function 'f' into a _memoized_ version that also stores results returned
+by args passed in, so that future calls with the same inputs can save work."
+  (with (cache (table) nilcache (table))
+    (fn args
+      (or cache.args
+          (and (no nilcache.args)
+               (aif (apply f args)
+                    (= cache.args it)
+                    (do (set nilcache.args)
+                        nil)))))))
+
+(mac defmemo (name parms . body)
+"Like [[def]] but defines a memoized function. See [[memo]]."
+  `(assign ,name (memo (fn ,parms ,@body))))
