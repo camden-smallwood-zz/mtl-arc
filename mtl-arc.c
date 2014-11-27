@@ -80,9 +80,9 @@ atom make(atom_type type) {
 	atom result = malloc(sizeof(struct atom));
 	type(result) = type;
 	mark(result) = atom_not_marked;
-	result->next = stack;
+/*	result->next = stack;
 	stack = result;
-	stack_size++;
+	stack_size++;*/
 	return result;
 }
 
@@ -205,17 +205,17 @@ atom new_output(FILE *stream) {
 }
 
 void gc_mark(atom a) {
-	if (no(a) || abuiltin(a) || mark(a) == atom_marked)
+	/*if (no(a) || abuiltin(a) || mark(a) == atom_marked)
 		return;
 	mark(a) = atom_marked;
 	if (acons(a) || afn(a) || amac(a) || atable(a) || iserr(a)) {
 		gc_mark(car(a));
 		gc_mark(cdr(a));
-	}
+	}*/
 }
 
 void gc_sweep() {
-	gc_mark(syms);
+/*	gc_mark(syms);
 	gc_mark(root);
 	for (atom a, *p = &stack; a = *p, *p != NULL; *p = a->next) {
 		if (mark(a) == atom_not_marked) {
@@ -228,7 +228,7 @@ void gc_sweep() {
 		} else {
 			mark(a) = atom_not_marked;
 		}
-	}
+	}*/
 }
 
 atom env_create(atom parent) {
