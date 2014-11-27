@@ -14,11 +14,17 @@ typedef enum {
 	type_builtin, type_input, type_output
 } atom_type;
 
+typedef enum {
+	atom_not_marked = (unsigned char)0,
+	atom_marked = (unsigned char)1
+} atom_mark;
+
 typedef struct atom *atom;
 typedef atom (*builtin)(atom);
 
 struct atom {
 	atom_type type;
+	atom_mark mark;
 	union {
 		double num;
 		char *sym;
@@ -28,12 +34,13 @@ struct atom {
 	};
 };
 
-atom nil, t, syms, root,
+atom nil, t, stack, syms, root,
      sym_quote, sym_quasiquote, sym_unquote, sym_unquote_expand,
      sym_if, sym_is, sym_while, sym_assign, sym_fn, sym_mac;
 
 #define no(atom) ((atom) == nil)
 #define type(atom) ((atom)->type)
+#define mark(atom) ((atom)->mark)
 #define isa(a, b) (type(a) == b)
 #define anum(atom) (isa(atom, type_num))
 #define numval(atom) ((atom)->num)
@@ -63,15 +70,19 @@ atom nil, t, syms, root,
 #define exctx(atom) (car(atom))
 #define exmsg(atom) (cdr(atom))
 
+atom cons(atom car, atom cdr);
+
 atom make(atom_type type) {
 	atom result = malloc(sizeof(struct atom));
 	type(result) = type;
+	mark(result) = atom_not_marked;
 	return result;
 }
 
 atom new_string(const char *string) {
 	atom result = make(type_string);
 	stringval(result) = strdup(string);
+	stack = cons(result, stack);
 	return result;
 }
 
@@ -79,6 +90,7 @@ atom err(const char *message, atom context) {
 	atom result = make(type_exception);
 	exctx(result) = context;
 	exmsg(result) = new_string(message);
+	stack = cons(result, stack);
 	return result;
 }
 
@@ -98,6 +110,7 @@ atom new_sym(const char *sym) {
 		return err("sym names may not consist of only numbers", nil);
 	atom result = make(type_sym);
 	symname(result) = strdup(sym);
+	stack = cons(result, stack);
 	return result;
 }
 
@@ -112,6 +125,10 @@ atom cons(atom car, atom cdr) {
 	atom result = make(type_cons);
 	car(result) = car;
 	cdr(result) = cdr;
+	atom s = stack;
+	stack = make(type_cons);
+	car(stack) = result;
+	cdr(stack) = s;
 	return result;
 }
 
@@ -165,6 +182,7 @@ atom table(atom entries) {
 		}
 		tset(result, car(entries), cadr(entries));
 	}
+	stack = cons(result, stack);
 	return result;
 }
 
@@ -323,7 +341,6 @@ atom read_expr(FILE *stream) {
 			return intern(token);
 		return new_num(atof(token));
 	} else if (token[0] == '-' && strlen(token) > 1) {
-		puts("yup");
     	return cons(intern("-"), cons(intern(&token[1]), nil));
     } else if (token[0] != '.' &&
 	           token[strlen(token) - 1] != '.' &&
@@ -1028,6 +1045,7 @@ atom prim_load(atom args) {
 
 void arc_init() {
 	nil = new_sym("nil");
+	stack = nil;
 	syms = cons(nil, nil);
 	root = cons(nil, nil);
 	sym_quote = intern("quote");
