@@ -32,11 +32,15 @@ struct atom {
 		struct { char *help; builtin prim; };
 		FILE *stream;
 	};
+	atom next;
 };
 
-atom nil, t, stack, syms, root,
+atom nil, t, syms, root,
      sym_quote, sym_quasiquote, sym_unquote, sym_unquote_expand,
      sym_if, sym_is, sym_while, sym_assign, sym_fn, sym_mac;
+
+atom stack = NULL;
+unsigned long long stack_size = 0;
 
 #define no(atom) ((atom) == nil)
 #define type(atom) ((atom)->type)
@@ -76,13 +80,15 @@ atom make(atom_type type) {
 	atom result = malloc(sizeof(struct atom));
 	type(result) = type;
 	mark(result) = atom_not_marked;
+	result->next = stack;
+	stack = result;
+	stack_size++;
 	return result;
 }
 
 atom new_string(const char *string) {
 	atom result = make(type_string);
 	stringval(result) = strdup(string);
-	stack = cons(result, stack);
 	return result;
 }
 
@@ -90,7 +96,6 @@ atom err(const char *message, atom context) {
 	atom result = make(type_exception);
 	exctx(result) = context;
 	exmsg(result) = new_string(message);
-	stack = cons(result, stack);
 	return result;
 }
 
@@ -110,7 +115,6 @@ atom new_sym(const char *sym) {
 		return err("sym names may not consist of only numbers", nil);
 	atom result = make(type_sym);
 	symname(result) = strdup(sym);
-	stack = cons(result, stack);
 	return result;
 }
 
@@ -125,10 +129,6 @@ atom cons(atom car, atom cdr) {
 	atom result = make(type_cons);
 	car(result) = car;
 	cdr(result) = cdr;
-	atom s = stack;
-	stack = make(type_cons);
-	car(stack) = result;
-	cdr(stack) = s;
 	return result;
 }
 
@@ -182,7 +182,6 @@ atom table(atom entries) {
 		}
 		tset(result, car(entries), cadr(entries));
 	}
-	stack = cons(result, stack);
 	return result;
 }
 
@@ -203,6 +202,33 @@ atom new_output(FILE *stream) {
 	atom result = make(type_output);
 	stream(result) = stream;
 	return result;
+}
+
+void gc_mark(atom a) {
+	if (no(a) || abuiltin(a) || mark(a) == atom_marked)
+		return;
+	mark(a) = atom_marked;
+	if (acons(a) || afn(a) || amac(a) || atable(a) || iserr(a)) {
+		gc_mark(car(a));
+		gc_mark(cdr(a));
+	}
+}
+
+void gc_sweep() {
+	gc_mark(syms);
+	gc_mark(root);
+	for (atom a, *p = &stack; a = *p, *p != NULL; *p = a->next) {
+		if (mark(a) == atom_not_marked) {
+			if (astring(a))
+				free(stringval(a));
+			if (!abuiltin(a) || !no(a)) {
+				free(a);
+				stack_size--;
+			}
+		} else {
+			mark(a) = atom_not_marked;
+		}
+	}
 }
 
 atom env_create(atom parent) {
@@ -1118,12 +1144,14 @@ void arc_init() {
 int main(int argc, char **argv) {
 	puts("  mtl-arc v0.3\n================");
 	arc_init();
+	gc_sweep();
 	for(;;) {
 		printf("%s", "> ");
 		atom result = eval(read_expr(stdin), root);
 		printf("%s", "=> ");
 		write_expr(stdout, result);
-		printf("\n");
+		puts("");
+		gc_sweep();
 	}
 	return 0;
 }
