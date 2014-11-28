@@ -5,7 +5,7 @@ A new implementation of the Arc language
 This is a major work in progress, and will change quite often. 
 The core is a bare-minimum C interpreter designed for building Arc on top of. 
 My goal is to maintain the simplicity, readability and speed of the core, while defining as much of Arc in Arc itself as possible. 
-There is currently an experimental mark/sweep garbage collector in place; I will either replace it or make it better.
+There is currently no garbage collection; I'm experimenting with options.
 
 Features:
 =========
