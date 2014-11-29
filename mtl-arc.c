@@ -14,7 +14,6 @@ typedef enum {
 	type_builtin, type_input, type_output
 } atom_type;
 
-
 typedef struct atom *atom;
 typedef atom (*builtin)(atom);
 
@@ -852,19 +851,6 @@ atom prim_shl(atom args) {
 	                        (long long)numval(cadr(args))));
 }
 
-atom prim_pr(atom args) {
-	for (; !no(args); args = cdr(args)) {
-		if (astring(car(args))) {
-			printf("%s", stringval(car(args)));
-		} else if (achar(car(args))) {
-			printf("%c", charval(car(args)));
-		} else {
-			write_expr(stdout, car(args));
-		}
-	}
-	return nil;
-}
-
 atom prim_string(atom args) {
 	if (no(args))
 		return err("invalid arguments supplied to 'string'", args);
@@ -1010,6 +996,65 @@ atom prim_stderr(atom args) {
 	return new_output(stderr);
 }
 
+atom prim_readb(atom args) {
+	FILE *stream;
+	if (no(args))
+		stream = stdin;
+	else if (!no(cdr(args)) || !isinput(car(args)))
+		return err("invalid arguments supplied to 'readb'", args);
+	else stream = stream(car(args));
+	return new_num((double)fgetc(stream));
+}
+
+atom prim_readc(atom args) {
+	FILE *stream;
+	if (no(args))
+		stream = stdin;
+	else if (!no(cdr(args)) || !isinput(car(args)))
+		return err("invalid arguments supplied to 'readc'", args);
+	else stream = stream(car(args));
+	return new_char(fgetc(stream));
+}
+
+atom prim_peekc(atom args) {
+	FILE *stream;
+	if (no(args))
+		stream = stdin;
+	else if (!no(cdr(args)) || !isinput(car(args)))
+		return err("invalid arguments supplied to 'peekc'", args);
+	else stream = stream(car(args));
+	char val = fgetc(stream);
+	ungetc(val, stream);
+	return new_char(val);
+}
+
+atom prim_readline(atom args) {
+	FILE *stream;
+	char buf[1024];
+	int i = 0;
+	memset(buf, 0, 1024);
+	if (no(args))
+		stream = stdin;
+	else if (!no(cdr(args)) || !isinput(car(args)))
+		return err("invalid arguments supplied to 'readline'", args);
+	else stream = stream(car(args));
+	for (buf[0] = fgetc(stream), i = 0;
+	     buf[i] != '\n' && buf[i] != '\r';
+	     buf[++i] = fgetc(stream));
+	buf[i] = '\0';
+	return new_string(buf);
+}
+
+atom prim_sread(atom args) {
+	FILE *stream;
+	if (no(args))
+		stream = stdin;
+	else if (!no(cdr(args)) || !isinput(car(args)))
+		return err("invalid arguments supplied to 'sread'", args);
+	else stream = stream(car(args));
+	return read_expr(stream);
+}
+
 atom arc_load_file(const char *path) {
 	printf("loading \"%s\"...\n", path);
 	FILE *stream = fopen(path, "r+");
@@ -1024,6 +1069,84 @@ atom prim_load(atom args) {
 	if (no(args) || !no(cdr(args)) || !astring(car(args)))
 		return err("invalid arguments supplied to 'load'", args);
 	return arc_load_file(stringval(car(args)));
+}
+
+atom prim_disp(atom args) {
+	if (no(args))
+		return nil;
+	FILE *stream;
+	if (no(cdr(args)))
+		stream = stdout;
+	else if (!isoutput(cadr(args)) || !no(cddr(args)))
+		return err("invalid arguments supplied to 'disp'", args);
+	else stream = stream(cadr(args));
+	if (astring(car(args)))
+		fprintf(stream, "%s", stringval(car(args)));
+	else if (achar(car(args))) 
+		fprintf(stream, "%c", charval(car(args)));
+	else
+		write_expr(stdout, car(args));
+	return nil;
+}
+
+atom prim_write(atom args) {
+	if (no(args))
+		return nil;
+	FILE *stream;
+	if (no(cdr(args)))
+		stream = stdout;
+	else if (!isoutput(cadr(args)) || !no(cddr(args)))
+		return err("invalid arguments supplied to 'write'", args);
+	else stream = stream(cadr(args));
+	write_expr(stream, car(args));
+	return nil;
+}
+
+atom prim_writeb(atom args) {
+	if (no(args) || !anum(car(args)))
+		return err("invalid arguments supplied to 'writeb'", args);
+	FILE *stream;
+	if (no(cdr(args)))
+		stream = stdout;
+	else if (!isoutput(cadr(args)) || !no(cddr(args)))
+		return err("invalid arguments supplied to 'writeb'", args);
+	else stream = stream(cadr(args));
+	fputc((unsigned char)numval(car(args)), stream);
+	return nil;
+}
+
+atom prim_writec(atom args) {
+	if (no(args) || !achar(car(args)))
+		return err("invalid arguments supplied to 'writeb'", args);
+	FILE *stream;
+	if (no(cdr(args)))
+		stream = stdout;
+	else if (!isoutput(cadr(args)) || !no(cddr(args)))
+		return err("invalid arguments supplied to 'writeb'", args);
+	else stream = stream(cadr(args));
+	fputc(charval(car(args)), stream);
+	return nil;
+}
+
+atom prim_infile(atom args) {
+	if (no(args) || !astring(car(args)) || (!no(cdr(args)) && !asym(cadr(args))))
+		return err("invalid arguments supplied to 'infile'", args);
+	FILE *stream = fopen(stringval(car(args)), "r");
+	return new_input(stream);
+}
+
+atom prim_outfile(atom args) {
+	if (no(args) || !astring(car(args)) || (!no(cdr(args)) && !asym(cadr(args))))
+		return err("invalid arguments supplied to 'outfile'", args);
+	FILE *stream = fopen(stringval(car(args)), "w");
+	return new_output(stream);
+}
+
+atom prim_close(atom args) {
+	if (no(args) || !no(cdr(args)) || !isinput(car(args)) || !isoutput(car(args)))
+		return err("invalid arguments supplied to 'close'", args);
+	fclose(stream(car(args)));
+	return nil;
 }
 
 void arc_init() {
@@ -1041,34 +1164,20 @@ void arc_init() {
 	sym_fn = intern("fn");
 	sym_mac = intern("mac");
 	env_assign(root, t = intern("t"), t);
-	env_assign(root, intern("cons"), new_builtin(prim_cons,
-		"Constructs a pair of atoms (cons) from the provided first (car) and rest (cdr) atoms."));
-	env_assign(root, intern("car"), new_builtin(prim_car,
-		"Gets the first (car) of a pair of atoms (cons)."));
-	env_assign(root, intern("cdr"), new_builtin(prim_cdr,
-		"Gets the rest (cdr) of a pair of atoms (cons)."));
-	env_assign(root, intern("type"), new_builtin(prim_type,
-		"Gets the type of an atom."));
-	env_assign(root, intern("err"), new_builtin(prim_err,
-		"Creates an exception which takes a message string and a context."));
-	env_assign(root, intern("help"), new_builtin(prim_help,
-		"Gets the help string of an atom if available."));
-	env_assign(root, intern("apply"), new_builtin(prim_apply,
-		"Applies the supplied arguments to the function."));
-	env_assign(root, intern("eval"), new_builtin(prim_eval,
-		"Evaluates the supplied argument."));
-	env_assign(root, intern("+"), new_builtin(prim_add,
-		"Calculates the incremental sum of the supplied numbers."));
-	env_assign(root, intern("-"), new_builtin(prim_sub,
-		"Calculates the incremental difference of the supplied numbers."));
-	env_assign(root, intern("*"), new_builtin(prim_mul,
-		"Calculates the incremental product of the supplied numbers."));
-	env_assign(root, intern("/"), new_builtin(prim_div,
-		"Calculates the incremental remainder of the supplied numbers."));
-	env_assign(root, intern("<"), new_builtin(prim_lt,
-		"Checks to see if each number is less than the next provided number."));
-	env_assign(root, intern(">"), new_builtin(prim_gt,
-		"Checks to see if each number is greater than the next provided number."));
+	env_assign(root, intern("cons"), new_builtin(prim_cons, ""));
+	env_assign(root, intern("car"), new_builtin(prim_car, ""));
+	env_assign(root, intern("cdr"), new_builtin(prim_cdr, ""));
+	env_assign(root, intern("type"), new_builtin(prim_type, ""));
+	env_assign(root, intern("err"), new_builtin(prim_err, ""));
+	env_assign(root, intern("help"), new_builtin(prim_help, ""));
+	env_assign(root, intern("apply"), new_builtin(prim_apply, ""));
+	env_assign(root, intern("eval"), new_builtin(prim_eval, ""));
+	env_assign(root, intern("+"), new_builtin(prim_add, ""));
+	env_assign(root, intern("-"), new_builtin(prim_sub, ""));
+	env_assign(root, intern("*"), new_builtin(prim_mul, ""));
+	env_assign(root, intern("/"), new_builtin(prim_div, ""));
+	env_assign(root, intern("<"), new_builtin(prim_lt, ""));
+	env_assign(root, intern(">"), new_builtin(prim_gt, ""));
 	env_assign(root, intern("cos"), new_builtin(prim_cos, ""));
 	env_assign(root, intern("expt"), new_builtin(prim_expt, ""));
 	env_assign(root, intern("log"), new_builtin(prim_log, ""));
@@ -1078,22 +1187,28 @@ void arc_init() {
 	env_assign(root, intern("sqrt"), new_builtin(prim_sqrt, ""));
 	env_assign(root, intern("tan"), new_builtin(prim_tan, ""));
 	env_assign(root, intern("trunc"), new_builtin(prim_trunc, ""));
-	env_assign(root, intern("shl"), new_builtin(prim_shl,
-		"Shifts the binary twos-complement representation of 'n' left by 'm' bits."));
-	env_assign(root, intern("pr"), new_builtin(prim_pr,
-		"Prints each supplied atom to the stdout stream."));
-	env_assign(root, intern("table"), new_builtin(table,
-		"Creates a new table, optionally taking each two supplied arguments as a key/value pair."));
+	env_assign(root, intern("shl"), new_builtin(prim_shl, ""));
+	env_assign(root, intern("table"), new_builtin(table, ""));
 	env_assign(root, intern("string"), new_builtin(prim_string, ""));
 	env_assign(root, intern("newstring"), new_builtin(prim_newstring, ""));
 	env_assign(root, intern("coerce"), new_builtin(prim_coerce, ""));
-	env_assign(root, intern("len"), new_builtin(prim_len,
-		"Calculates the length of the supplied list or string."));
+	env_assign(root, intern("len"), new_builtin(prim_len, ""));
 	env_assign(root, intern("stdin"), new_builtin(prim_stdin, ""));
 	env_assign(root, intern("stdout"), new_builtin(prim_stdout, ""));
 	env_assign(root, intern("stderr"), new_builtin(prim_stderr, ""));
-	env_assign(root, intern("load"), new_builtin(prim_load,
-		"Loads a file into the root environment."));
+	env_assign(root, intern("readb"), new_builtin(prim_readb, ""));
+	env_assign(root, intern("readc"), new_builtin(prim_readc, ""));
+	env_assign(root, intern("peekc"), new_builtin(prim_peekc, ""));
+	env_assign(root, intern("readline"), new_builtin(prim_readline, ""));
+	env_assign(root, intern("sread"), new_builtin(prim_sread, ""));
+	env_assign(root, intern("load"), new_builtin(prim_load, ""));
+	env_assign(root, intern("disp"), new_builtin(prim_disp, ""));
+	env_assign(root, intern("write"), new_builtin(prim_write, ""));
+	env_assign(root, intern("writeb"), new_builtin(prim_writeb, ""));
+	env_assign(root, intern("writec"), new_builtin(prim_writec, ""));
+	env_assign(root, intern("infile"), new_builtin(prim_infile, ""));
+	env_assign(root, intern("outfile"), new_builtin(prim_outfile, ""));
+	env_assign(root, intern("close"), new_builtin(prim_close, ""));
 	arc_load_file("arc.arc");
 }
 
