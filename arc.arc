@@ -11,12 +11,18 @@
 "Creates a list containing the given 'args'."
   args)
 
+(def pr args
+"Prints each supplied argument incrementally."
+  (while args
+    (disp car.args)
+    (= args cdr.args)))
+
 (def prn args
 "Prints each supplied argument incrementally on a new line."
   (while args
-    (pr car.args)
+    (disp car.args)
     (= args cdr.args))
-  (pr #\newline))
+  (disp #\newline))
 
 (def no (x)
 "Checks to see if 'x' is 'nil'."
