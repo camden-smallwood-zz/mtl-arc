@@ -32,7 +32,7 @@ Special Forms:
 
 Builtin Functions:
 ==================
-```cons, car, cdr, type, err, help, apply, eval, +, -, *, /, <, >, cos, expt, log, mod, rand, sin, sqrt, tan, trunc, shl, pr, table, string, newstring, coerce, len, stdin, stdout, stderr, load```
+```cons, car, cdr, type, err, help, apply, eval, +, -, *, /, <, >, cos, expt, log, mod, rand, sin, sqrt, tan, trunc, shl, pr, table, string, newstring, coerce, len, stdin, stdout, stderr, readb, readc, peekc, sread, load, disp, write, writeb, writec, infile, outfile, close```
 
 Defined Functions:
 ==================
