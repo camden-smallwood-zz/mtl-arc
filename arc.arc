@@ -1,15 +1,52 @@
 
+(assign caar (fn (x) (car car.x)))
+(assign cadr (fn (x) (car cdr.x)))
+(assign cdar (fn (x) (cdr car.x)))
+(assign cddr (fn (x) (cdr cdr.x)))
+(assign cadar (fn (x) (car cdar.x)))
+
+(assign list (fn args
+"Creates a list containing the given 'args'."
+  args))
+
+(assign no (fn (x)
+"Checks to see if 'x' is 'nil'."
+  (is x nil)))
+
+(assign isa (fn (a b)
+  (is type.a b)))
+
+(assign append (fn (a b)
+"Creates a new list of 'a' with 'b' appended to the end."
+  (if no.a b
+    (cons car.a (append cdr.a b)))))
+
+(mac quasiquote (x)
+  (if (isa x 'cons)
+      (if (is car.x 'unquote) cadr.x
+          (if (if (isa car.x 'cons)
+                (is caar.x 'unquote-expand)
+                nil)
+              (list 'append
+                    cadar.x
+                    (list 'quasiquote cdr.x))
+              (list 'cons
+                    (list 'quasiquote car.x)
+                    (list 'quasiquote cdr.x))))
+      (list 'quote x)))
+
 (mac = (x y)
 "Assigns 'x' to the value of 'y'."
   `(assign ,x ,y))
 
+(mac do args
+"Evaluates each expression in sequence and returns the result of the
+last expression."
+  `((fn () ,@args)))
+
 (mac def (name args . body)
 "Defines a new function named 'name'."
-  ((fn x x) 'assign name (cons 'fn (cons args body))))
-
-(def list args
-"Creates a list containing the given 'args'."
-  args)
+  `(assign ,name (fn ,args ,@body)))
 
 (def pr args
 "Prints each supplied argument incrementally."
@@ -24,41 +61,7 @@
     (= args cdr.args))
   (disp #\newline))
 
-(def no (x)
-"Checks to see if 'x' is 'nil'."
-  (is x nil))
-
-(def append (a b)
-"Creates a new list of 'a' with 'b' appended to the end."
-  (if no.a b
-    (cons car.a (append cdr.a b))))
-
-(mac quasiquote (x)
-  (if (isa x 'cons)
-      (if (is car.x 'unquote) cadr.x
-          (if (if (isa car.x 'cons)
-                (is caar.x 'unquote-expand)
-                nil)
-              (list 'append
-                    (cadr car.x)
-                    (list 'quasiquote cdr.x))
-              (list 'cons
-                    (list 'quasiquote car.x)
-                    (list 'quasiquote cdr.x))))
-      (list 'quote x)))
-
-(def isa (a b) (is type.a b))
 (def isnt (x y) (no (is x y)))
-
-(def caar (x) (car car.x))
-(def cadr (x) (car cdr.x))
-(def cdar (x) (cdr car.x))
-(def cddr (x) (cdr cdr.x))
-
-(mac do args
-"Evaluates each expression in sequence and returns the result of the
-last expression."
-  `((fn () ,@args)))
 
 (mac when (test . body)
 "Like [[if]], but can take multiple expressions to run when 'test' is not nil.
