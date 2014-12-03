@@ -775,3 +775,93 @@ barring the sign."
 (def med (ns (o test >))
 "Returns the median of a list of numbers 'ns' according to the comparison 'test'."
   ((sort test ns) (round (/ len.ns 2))))
+
+(def sort (test seq)
+"Orders a list 'seq' by comparing its elements using 'test'."
+  (if (alist seq)
+    (mergesort test (copy seq))
+    (coerce (mergesort test (coerce seq 'cons)) (type seq))))
+
+(def mergesort (less? lst)
+  (with (n (len lst))
+    (if (<= n 1) lst
+        (loop (n n)
+           (if (> n 2)
+                (withs (j (/ (if (even n) n (- n 1)) 2)
+                        a (recur j)
+                        b (recur (- n j)))
+                  (merge less? a b))
+               (is n 2)
+                (with (x (car lst) y (cadr lst) p lst)
+                  (= lst (cddr lst))
+                  (when (less? (as num y) (as num x)) (= (car p) y) (= (car (cdr p)) x))
+                  (= (cdr (cdr p)) nil)
+                  p)
+               (is n 1)
+                (with (p lst)
+                  (= lst (cdr lst))
+                  (= (cdr p) nil)
+                  p)
+               nil)))))
+
+(def merge (less? x y)
+  (if (no x) y
+      (no y) x
+      (let lup nil
+        (assign lup
+                (fn (r x y r-x?)
+                  (if (less? (as num (car y)) (as num (car x)))
+                    (do (if r-x? (= (cdr r) y))
+                        (if (cdr y) (lup y x (cdr y) nil) (= (cdr y) x)))
+                    ; (car x) <= (car y)
+                    (do (if (no r-x?) (= (cdr r) x))
+                        (if (cdr x) (lup x (cdr x) y t) (= (cdr x) y))))))
+        (if (less? (as num (car y)) (as num (car x)))
+          (do (if (cdr y) (lup y x (cdr y) nil) (= (cdr y) x))
+              y)
+          ; (car x) <= (car y)
+          (do (if (cdr x) (lup x (cdr x) y t) (= (cdr x) y))
+              x)))))
+
+(def bestn (n f seq)
+"Returns a list of the top 'n' elements of 'seq' ordered by 'f'."
+  (firstn n (sort f seq)))
+
+(def split (seq pos)
+"Partitions 'seq' at index 'pos'."
+  (list (cut seq 0 pos) (cut seq pos)))
+
+(def split-at (s delim)
+"Partitions string s at first instance of delimiter, dropping delimiter."
+  (if (acons s)
+        (iflet i (pos delim s)
+          (list (cut s 0 i)
+                (cut s (+ i 1))))
+      (iflet i (posmatch delim s)
+        (list (cut s 0 i)
+              (cut s (+ i len.delim)))
+        (list s))))
+
+(def strip-after (s delim)
+  (car:split-at s delim))
+
+(def count (test x)
+"Returns the number of elements of 'x' that pass 'test'."
+  (with (n 0 testf testify.test)
+    (each elt x
+      (if testf.elt ++.n))
+    n))
+
+(def reduce (f xs)
+"Accumulates elements of 'xs' using binary function 'f'."
+  (if (cddr xs)
+    (reduce f (cons (f car.xs cadr.xs) cddr.xs))
+    (let result (map f xs)
+      (apply f car.result cadr.result))))
+
+(def rreduce (f xs)
+"Like [[reduce]] but accumulates elements of 'xs' in reverse order."
+  (if (cddr xs)
+    (apply f (car xs) (rreduce f (cdr xs)))
+    (let result (map f xs)
+      (apply f car.result cadr.result))))
