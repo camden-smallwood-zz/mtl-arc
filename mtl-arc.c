@@ -160,7 +160,7 @@ atom env_assign_eq(atom env, atom sym, atom val) {
 	return env_assign(env, sym, val);
 }
 
-char *char_to_string(const char value) {
+char *char_to_token(const char value) {
 	if (value == '\n') return "#\\newline";
 	if (value == '\r') return "#\\return";
 	if (value == '\t') return "#\\tab";
@@ -170,7 +170,7 @@ char *char_to_string(const char value) {
 	return strdup(cbuf);
 }
 
-char string_to_char(const char *str) {
+char token_to_char(const char *str) {
 	if (!strcmp(str, "#\\newline")) return '\n';
 	if (!strcmp(str, "#\\return")) return '\r';
 	if (!strcmp(str, "#\\tab")) return '\t';
@@ -236,64 +236,97 @@ char *get_token(FILE *stream) {
 
 atom read_expr(FILE *stream) {
 	char *token = get_token(stream);
-	if (token == NULL) {
+	if (token == NULL)
 		return nil;
-	} else if (!strcmp(token, "(")) {
+	
+	// lists: (a b c)
+	if (!strcmp(token, "("))
 		return read_list(stream);
-	} else if (!strcmp(token, "[")) {
+	
+	// anonymous functions: [list _] => (fn (_) (list _))
+	if (!strcmp(token, "[")) {
 		atom body = read_bracket(stream);
-		if (iserr(body)) return body;
+		if (iserr(body))
+			return body;
 		return cons(sym_fn, cons(cons(sym("_"), nil), cons(body, nil)));
-	} else if (!strcmp(token, "\"")) {
+	}
+	
+	// strings: "This is a string, by golly!"
+	if (!strcmp(token, "\""))
 		return read_string(stream);
-	} else if (!strcmp(token, ";")) {
+	
+	// end-of-line comments: ;This is a fancy comment
+	if (!strcmp(token, ";")) {
 		while (fgetc(stream) != '\n');
 		return read_expr(stream);
-	} else if (!strcmp(token, "'")) {
+	}
+	
+	// quote: 'x => (quote x)
+	if (!strcmp(token, "'"))
 		return cons(sym_quote, cons(read_expr(stream), nil));
-	} else if (!strcmp(token, "`")) {
+	
+	// quasiquote: `(list 1 2 3) => (list 1 2 3)
+	if (!strcmp(token, "`"))
 		return cons(sym_quasiquote, cons(read_expr(stream), nil));
-	} else if (!strcmp(token, ",")) {
+	
+	// unquote & unquote-expand: (with (x 1 y '(2 3 4))
+	if (!strcmp(token, ",")) { //  `(list ,x ,@y)) => (1 2 3 4)
 		char c = getc(stream);
 		if (c == '@')
 			return cons(sym_unquote_expand, cons(read_expr(stream), nil));
 		ungetc(c, stream);
 		return cons(sym_unquote, cons(read_expr(stream), nil));
-	} else if (token[strspn(token, "-.0123456789")] == '\0') {
-		if (!strcmp(token, "-") || !strcmp(token, "."))
+	}
+	
+	// numbers: 1, -0.5, .007, 9999999, etc.
+	if (token[strspn(token, "-.0123456789")] == '\0') {
+		if (token[strspn(token, "-.")] == '\0')
 			return sym(token);
 		return new_num(atof(token));
-	} else if (token[0] == '-' && strlen(token) > 1) {
+	}
+	
+	// variable negation: -x => (- x)
+	if (token[0] == '-' && strlen(token) > 1)
     	return cons(sym("-"), cons(sym(&token[1]), nil));
-    } else if (token[0] != '.' &&
-	           token[strlen(token) - 1] != '.' &&
-	           strchr(token, '.') != NULL) {
+    
+    // dotted: x.y => (x y)
+    if (token[0] != '.' && token[strlen(token) - 1] != '.' && strchr(token, '.') != NULL) {
     	char **syms = split_string(token, '.');
     	return cons(sym(syms[0]), cons(sym(syms[1]), nil));
-    } else if (token[0] != '!' &&
-	           token[strlen(token) - 1] != '!' &&
-	           strchr(token, '!') != NULL) {
+    }
+    
+    // dotted-quote: x!y => (x 'y)
+    if (token[0] != '!' && token[strlen(token) - 1] != '!' && strchr(token, '!') != NULL) {
     	char **syms = split_string(token, '!');
     	return cons(sym(syms[0]), cons(cons(sym_quote, cons(sym(syms[1]), nil)), nil));
-    } else if (token[0] != ':' &&
-	           token[strlen(token) - 1] != ':' &&
-	           strchr(token, ':') != NULL) {
+    }
+    
+    // compose: (let x nil (++:car:push 1 x)) => (++ (car (push 1 x))) => (2)
+    if (token[0] != ':' && token[strlen(token) - 1] != ':' && strchr(token, ':') != NULL) {
 		char **syms = split_string(token, ':');
 		atom dims = nil, comps = nil;
 		for (int i = 0; syms[i] != NULL; i++)
 			dims = cons(sym(syms[i]), dims);
 		for (; !no(dims); comps = cons(car(dims), comps), dims = cdr(dims));
 		return cons(sym("compose"), comps);
-    } else if (token[0] == '~' && strlen(token) > 1) {
+    }
+
+	// complement: (~no t) => ((complement no) t) => ((no no) t) => t
+	if (token[0] == '~' && strlen(token) > 1)
     	return cons(sym("complement"), cons(sym(&token[1]), nil));
-    } else if (strlen(token) > 2) { // possible reader macro
-		if (token[0] == '#' && token[1] == '\\') { // char
-			return new_char(string_to_char(token));
-		} else if (token[0] != '/' && // ratio
-		           token[strlen(token) - 1] != '/' &&
-		           strchr(token, '/') != NULL) {
+    
+    // reader macros
+    if (strlen(token) > 2) {
+    	
+    	// characters
+		if (token[0] == '#' && token[1] == '\\')
+			return new_char(token_to_char(token));
+		
+		// ratios
+		if (token[0] != '/' && token[strlen(token) - 1] != '/' && strchr(token, '/') != NULL) {
 			char **nums = split_string(strdup(token), '/');
-			if (!(nums[0][strspn(nums[0], "0123456789")] == '\0') ||
+			if (nums[2] != NULL ||
+			    !(nums[0][strspn(nums[0], "0123456789")] == '\0') ||
 			    !(nums[1][strspn(nums[1], "0123456789")] == '\0'))
 				return sym(token);
 			return cons(sym("/"),
@@ -301,6 +334,8 @@ atom read_expr(FILE *stream) {
 			                 cons(new_num(atof(nums[1])), nil)));
 		}
 	}
+	
+	//symbols
 	return sym(token);
 }
 
@@ -343,7 +378,7 @@ void write_expr(FILE *stream, atom expr) {
 	} else if (astring(expr)) {
 		fprintf(stream, "\"%s\"", stringval(expr));
 	} else if (achar(expr)) {
-		fprintf(stream, "%s", char_to_string(charval(expr)));
+		fprintf(stream, "%s", char_to_token(charval(expr)));
 	} else if (acons(expr)) {
 		fprintf(stream, "(");
 		for (;;) {
@@ -638,15 +673,25 @@ atom coerce_sym(atom val) {
 }
 
 atom coerce_char(atom val) {
+	if (no(val))
+		return new_char('\0');
+	if (achar(val))
+		return val;
+	if (anum(val))
+		return new_char((char)((long long)numval(val)));
 	return err("can't coerce to 'char'", val);
 }
 
 atom coerce_cons(atom val) {
-	if (astring(val)) {
+	if (acons(val)) {
+		return val;
+	} else if (astring(val)) {
 		atom result = nil;
 		for (int i = strlen(stringval(val)) - 1; i != -1; i--)
 			result = cons(new_char(stringval(val)[i]), result);
 		return result;
+	} else if (atable(val)) {
+		return cons(car(val), cdr(val));
 	}
 	return err("can't coerce to 'cons'", val);
 }
@@ -664,15 +709,19 @@ atom builtin_cons(atom args) {
 atom builtin_car(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to 'car'", args);
-	if (car(args) == nil) return nil;
-	return caar(args);
+	atom arg = car(args);
+	if (no(arg) || !(acons(arg) || afn(arg) || amac(arg) || atable(arg)))
+		return err("invalid argument supplied to 'car'", arg);
+	return car(arg);
 }
 
 atom builtin_cdr(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to 'cdr'", args);
-	if (car(args) == nil) return nil;
-	return cdar(args);
+	atom arg = car(args);
+	if (no(arg) || !(acons(arg) || afn(arg) || amac(arg) || atable(arg)))
+		return err("invalid argument supplied to 'cdr'", arg);
+	return cdr(arg);
 }
 
 atom builtin_type(atom args) {
@@ -919,7 +968,8 @@ atom builtin_coerce(atom args) {
 }
 
 atom builtin_apply(atom args) {
-	if (no(args)) return err("invalid arguments supplied to 'apply'", args);
+	if (no(args) || no(cdr(args)) || !no(cddr(args)))
+		return err("invalid arguments supplied to 'apply'", args);
 	return apply(car(args), cdr(args));
 }
 
@@ -995,14 +1045,14 @@ atom builtin_peekc(atom args) {
 
 atom builtin_readline(atom args) {
 	FILE *stream;
-	char buf[1024];
-	int i = 0;
-	memset(buf, 0, 1024);
 	if (no(args))
 		stream = stdin;
 	else if (!no(cdr(args)) || !isinput(car(args)))
 		return err("invalid arguments supplied to 'readline'", args);
 	else stream = stream(car(args));
+	char buf[1024];
+	int i;
+	memset(buf, 0, 1024);
 	for (buf[0] = fgetc(stream), i = 0;
 	     buf[i] != '\n' && buf[i] != '\r';
 	     buf[++i] = fgetc(stream));
