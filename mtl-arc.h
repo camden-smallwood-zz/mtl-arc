@@ -89,8 +89,8 @@ atom env_get(atom env, atom key);
 atom env_assign(atom env, atom key, atom value);
 atom env_assign_eq(atom env, atom key, atom value);
 
-char *char_to_string(const char value);
-char string_to_char(const char *value);
+char *char_to_token(const char value);
+char token_to_char(const char *value);
 char **split_string(char *string, const char delim);
 
 atom read_expr(FILE *stream);
