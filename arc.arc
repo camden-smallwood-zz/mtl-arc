@@ -1,9 +1,9 @@
 
-(assign caar (fn (x) (car car.x)))
-(assign cadr (fn (x) (car cdr.x)))
-(assign cdar (fn (x) (cdr car.x)))
-(assign cddr (fn (x) (cdr cdr.x)))
-(assign cadar (fn (x) (car cdar.x)))
+(assign caar [car car._])
+(assign cadr [car cdr._])
+(assign cdar [cdr car._])
+(assign cddr [cdr cdr._])
+(assign cadar [car cdar._])
 
 (assign list (fn args
 "Creates a list containing the given 'args'."
@@ -14,6 +14,7 @@
   (is x nil)))
 
 (assign isa (fn (a b)
+"Checks to see if the type of 'a' is 'b'."
   (is type.a b)))
 
 (assign append (fn (a b)
@@ -22,7 +23,7 @@
     (cons car.a (append cdr.a b)))))
 
 (mac quasiquote (x)
-  (if (isa x 'cons)
+  (if (is type.x 'cons)
       (if (is car.x 'unquote) cadr.x
           (if (if (isa car.x 'cons)
                 (is caar.x 'unquote-expand)
@@ -40,8 +41,7 @@
   `(assign ,x ,y))
 
 (mac do args
-"Evaluates each expression in sequence and returns the result of the
-last expression."
+"Evaluates each expression in sequence and returns the result of the last expression."
   `((fn () ,@args)))
 
 (mac def (name args . body)
@@ -99,7 +99,7 @@ Can't take an 'else' branch."
 
 (def map1 (f xs)
 "Returns a list containing the result of function 'f' applied to every element of 'xs'."
-  (if (no xs) nil
+  (if no.xs nil
     (cons (f car.xs)
           (map1 f cdr.xs))))
 
@@ -320,19 +320,11 @@ More convenient form of [[coerce]] with arguments reversed; doesn't need
 (def map (f . seqs)
 "Successively applies corresponding elements of 'seqs' to function 'f'.
 Generalizes [[map1]] to functions with more than one argument."
-  (if (some [isa _ 'string] seqs)
-    (withs (n (apply min (map1 len seqs))
-            new (newstring n))
-      (loop (i 0)
-        (if (is i n)
-          new
-          (do (sref new (apply f (map1 [_ i] seqs)) i)
-              (recur (+ i 1))))))
-    (if (no cdr.seqs)
-          (map1 f car.seqs)
-        (all idfn seqs)
-          (cons (apply f (map1 car seqs))
-                (apply map f (map1 cdr seqs))))))
+  (if (no cdr.seqs)
+        (map1 f car.seqs)
+      (all idfn seqs)
+        (cons (apply f (map1 car seqs))
+              (apply map (cons f (map1 cdr seqs))))))
 
 (def mappend (f . args)
 "Like [[map]] followed by append."
