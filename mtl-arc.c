@@ -6,10 +6,18 @@
 
 atom nil, t, syms, root,
      sym_quote, sym_quasiquote, sym_unquote, sym_unquote_expand,
-     sym_if, sym_is, sym_while, sym_assign, sym_bound, sym_fn, sym_mac;
+     sym_if, sym_is, sym_while, sym_assign, sym_bound, sym_fn, sym_mac,
+     sym_optional;
+
+#define nomemcheck(a, msg) \
+	if (a == NULL) { \
+		fprintf(stderr, "=> exception:\n==> %s", msg); \
+		exit(1); \
+	}
 
 atom make(atom_type type) {
 	atom result = malloc(sizeof(struct atom));
+	nomemcheck(result, "failed to allocate 'atom'");
 	type(result) = type;
 	return result;
 }
@@ -22,9 +30,8 @@ atom cons(atom car, atom cdr) {
 }
 
 atom err(const char *message, atom context) {
-	atom result = make(type_exception);
-	exctx(result) = context;
-	exmsg(result) = new_string(message);
+	atom result = cons(context, new_string(message));
+	result->type = type_exception;
 	return result;
 }
 
@@ -68,6 +75,19 @@ atom new_char(const char c) {
 }
 
 atom new_closure(atom args, atom body, atom env) {
+	if (!alist(body))
+		return err("closure body must be a list", body);
+
+	// make sure all arguments are symbols or conses
+	for (atom p = args; !no(p); p = cdr(p)) {
+		if (asym(p))
+			break;
+		if (type(p) != type_cons || (type(car(p)) != type_sym && type(car(p)) != type_cons))
+			return err("invalid expression supplied as closure argument", p);
+		if (type(car(p)) == type_cons && car(car(p)) != sym_optional)
+			return err("invalid syntax in closure argument", car(p));
+	}
+	
 	return cons(env, cons(args, body));
 }
 
@@ -101,8 +121,8 @@ atom tset(atom table, atom key, atom value) {
 }
 
 atom table(atom entries) {
-	atom result = make(type_table);
-	car(result) = cdr(result) = nil;
+	atom result = cons(nil, nil);
+	result->type = type_table;
 	for (; !no(entries); entries = cddr(entries)) {
 		if (no(cdr(entries))) {
 			tset(result, car(entries), nil);
@@ -141,7 +161,7 @@ atom env_get(atom env, atom sym) {
 		if (caar(bs) == sym)
 			return cdar(bs);
 	if (no(car(env)))
-		return err("unbound symbol", sym);
+		return err("unbound sym", sym);
 	return env_get(car(env), sym);
 }
 
@@ -322,7 +342,7 @@ atom read_expr(FILE *stream) {
 		if (token[0] == '#' && token[1] == '\\')
 			return new_char(token_to_char(token));
 		
-		// ratios
+		// fractions
 		if (token[0] != '/' && token[strlen(token) - 1] != '/' && strchr(token, '/') != NULL) {
 			char **nums = split_string(strdup(token), '/');
 			if (nums[2] != NULL ||
@@ -1179,6 +1199,7 @@ void arc_init() {
 	sym_bound = sym("bound");
 	sym_fn = sym("fn");
 	sym_mac = sym("mac");
+	sym_optional = sym("o");
 	env_assign(root, t = sym("t"), t);
 	env_assign(root, sym("cons"), new_builtin(builtin_cons, ""));
 	env_assign(root, sym("car"), new_builtin(builtin_car, ""));
@@ -1229,7 +1250,7 @@ void arc_init() {
 }
 
 int main(int argc, char **argv) {
-	puts("  mtl-arc v0.3\n================");
+	puts("  mtl-arc v0.4\n================");
 	arc_init();
 	for(;;) {
 		printf("%s", "> ");
