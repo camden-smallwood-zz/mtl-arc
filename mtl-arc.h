@@ -64,7 +64,19 @@ struct atom {
 
 extern atom nil, t, syms, root,
             sym_quote, sym_quasiquote, sym_unquote, sym_unquote_expand,
-            sym_if, sym_is, sym_while, sym_assign, sym_bound, sym_fn, sym_mac;
+            sym_if, sym_is, sym_while, sym_assign, sym_bound, sym_fn, sym_mac,
+            sym_optional;
+
+extern atom stack;
+extern long long stack_size, stack_capacity;
+void stack_add(atom a);
+void stack_restore(long long saved_size);
+
+#define gc_tolerance 10000
+
+void gc_consider();
+void gc_mark(atom a);
+void gc_sweep();
 
 atom make(atom_type type);
 atom cons(atom car, atom cdr);
