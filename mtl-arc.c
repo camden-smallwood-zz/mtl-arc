@@ -1365,7 +1365,7 @@ void arc_init() {
 	env_assign(root, sym("sqrt"), new_builtin(builtin_sqrt, ""));
 	env_assign(root, sym("tan"), new_builtin(builtin_tan, ""));
 	env_assign(root, sym("trunc"), new_builtin(builtin_trunc, ""));
-	env_assign(root, sym("sh"), new_builtin(builtin_shl, ""));
+	env_assign(root, sym("shl"), new_builtin(builtin_shl, ""));
 	env_assign(root, sym_table, new_builtin(table, ""));
 	env_assign(root, sym("newstring"), new_builtin(builtin_newstring, ""));
 	env_assign(root, sym("coerce"), new_builtin(builtin_coerce, ""));
