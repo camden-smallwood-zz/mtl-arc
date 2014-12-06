@@ -1,5 +1,5 @@
 all:
-	cc -o mtl-arc -std=c11 mtl-arc.c
+	gcc -o mtl-arc -std=c11 *.c
 
 clean:
 	rm mtl-arc
