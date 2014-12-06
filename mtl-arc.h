@@ -7,9 +7,11 @@
 
 #include <ctype.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "stdioext.h"
 
 typedef enum {
 	type_num, type_sym, type_string, type_char, type_cons,
@@ -27,7 +29,7 @@ struct atom {
 		char *sym;
 		struct { atom car, cdr; };
 		struct { char *help; builtin prim; };
-		FILE *stream;
+		struct { FILE *stream; int outsize; char *outbuf; };
 	};
 };
 
@@ -58,14 +60,17 @@ struct atom {
 #define isinput(atom) (isa(atom, type_input))
 #define isoutput(atom) (isa(atom, type_output))
 #define stream(atom) ((atom)->stream)
+#define outsize(atom) ((atom)->outsize)
+#define outbuf(atom) ((atom)->outbuf)
 #define iserr(atom) (isa(atom, type_exception))
 #define exctx(atom) (car(atom))
 #define exmsg(atom) (cdr(atom))
 
 extern atom nil, t, syms, root,
-            sym_quote, sym_quasiquote, sym_unquote, sym_unquote_expand,
-            sym_if, sym_is, sym_while, sym_assign, sym_bound, sym_fn, sym_mac,
-            sym_optional;
+            sym_num, sym_sym, sym_char, sym_string, sym_cons, sym_fn, sym_mac, sym_table, sym_list,
+            sym_exception, sym_builtin, sym_input, sym_output, sym_quote, sym_if, sym_is, sym_car,
+            sym_cdr, sym_while, sym_assign, sym_bound, sym_optional, sym_wildcard, sym_quasiquote,
+            sym_unquote, sym_unquote_expand, sym_compose, sym_complement, sym_minus, sym_divide;
 
 extern atom stack;
 extern long long stack_size, stack_capacity;
@@ -105,9 +110,12 @@ char *char_to_token(const char value);
 char token_to_char(const char *value);
 char **split_string(char *string, const char delim);
 
+atom ssexpand(char *token);
+atom infix_expand(atom args);
 atom read_expr(FILE *stream);
 atom read_list(FILE *stream);
 atom read_bracket(FILE *stream);
+atom read_brace(FILE *stream);
 atom read_string(FILE *stream);
 
 void write_expr(FILE *stream, atom expr);
@@ -121,15 +129,17 @@ atom eval(atom expr, atom env);
 atom coerce_num(atom value);
 atom coerce_sym(atom value);
 atom coerce_char(atom value);
+atom coerce_string(atom value);
 atom coerce_cons(atom value);
 atom coerce_table(atom value);
 
-atom builtin_cons(atom args);
-atom builtin_car(atom args);
-atom builtin_cdr(atom args);
 atom builtin_type(atom args);
 atom builtin_err(atom args);
 atom builtin_help(atom args);
+atom builtin_cons(atom args);
+atom builtin_car(atom args);
+atom builtin_cdr(atom args);
+atom builtin_len(atom args);
 atom builtin_add(atom args);
 atom builtin_sub(atom args);
 atom builtin_mul(atom args);
@@ -146,13 +156,11 @@ atom builtin_sqrt(atom args);
 atom builtin_tan(atom args);
 atom builtin_trunc(atom args);
 atom builtin_shl(atom args);
-atom builtin_string(atom args);
 atom builtin_newstring(atom args);
 atom builtin_coerce(atom args);
 atom builtin_copy(atom args);
 atom builtin_apply(atom args);
 atom builtin_eval(atom args);
-atom builtin_len(atom args);
 atom builtin_stdin(atom args);
 atom builtin_stdout(atom args);
 atom builtin_stderr(atom args);
