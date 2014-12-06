@@ -5,9 +5,10 @@
 #include "mtl-arc.h"
 
 atom nil, t, syms, root,
-     sym_quote, sym_quasiquote, sym_unquote, sym_unquote_expand,
-     sym_if, sym_is, sym_while, sym_assign, sym_bound, sym_fn, sym_mac,
-     sym_optional;
+     sym_num, sym_sym, sym_char, sym_string, sym_cons, sym_fn, sym_mac, sym_table, sym_list,
+     sym_exception, sym_builtin, sym_input, sym_output, sym_quote, sym_if, sym_is, sym_car,
+     sym_cdr, sym_while, sym_assign, sym_bound, sym_optional, sym_wildcard, sym_quasiquote,
+     sym_unquote, sym_unquote_expand, sym_compose, sym_complement, sym_minus, sym_divide;
 
 #define nomemcheck(a, msg) \
 	if (a == NULL) { \
@@ -46,7 +47,7 @@ atom new_sym(const char *sym) {
 	    strchr(sym, '\t') != NULL ||
 	    strchr(sym, '\r') != NULL ||
 	    strchr(sym, '\n') != NULL)
-		return err("sym names may not contain whitespace characters", nil);
+		return err("sym names may not contain whitespace char *acters", nil);
 	if (sym[strspn(sym, "0123456789")] == '\0')
 		return err("sym names may not consist of only numbers", nil);
 	atom result = make(type_sym);
@@ -69,7 +70,7 @@ atom new_string(const char *string) {
 
 atom new_char(const char c) {
 	atom result = make(type_char);
-	result->sym = malloc(1);
+	result->sym = malloc(sizeof(char));
 	charval(result) = c;
 	return result;
 }
@@ -149,6 +150,8 @@ atom new_input(FILE *stream) {
 atom new_output(FILE *stream) {
 	atom result = make(type_output);
 	stream(result) = stream;
+	outsize(result) = 0;
+	outbuf(result) = NULL;
 	return result;
 }
 
@@ -243,15 +246,93 @@ char *get_token(FILE *stream) {
 	if(last_valid) { last_valid = 0; return last_token; }
 	do { if((ch = getc(stream)) == EOF) return NULL; } while(isspace(ch));
 	add_to_buf(ch);
-	if(strchr("()[]\"`',;", ch)) return buf_to_string();
+	if(strchr("(){}[]\"`',;", ch)) return buf_to_string();
 	for(;;) {
 		if((ch = getc(stream)) == EOF) exit(0);
-		if(strchr("()[]\"`',;", ch) || isspace(ch)) {
+		if(strchr("(){}[]\"`',;", ch) || isspace(ch)) {
 			ungetc(ch, stream);
 			return buf_to_string();
 		}
 		add_to_buf(ch);
 	}
+}
+
+atom ssexpand(char *token) {
+	if (token == NULL)
+		return nil;
+	
+	// variable negation: -x => (- x)
+	if (token[0] == '-' && strlen(token) > 1)
+    	return cons(sym_minus, cons(ssexpand(&token[1]), nil));
+    
+	// complement: (~no t) => ((complement no) t) => ((no no) t) => t
+	if (token[0] == '~' && strlen(token) > 1)
+    	return cons(sym_complement, cons(ssexpand(&token[1]), nil));
+        
+    // dotted-quote: x!y => (x 'y)
+    if (token[0] != '!' && token[strlen(token) - 1] != '!' && strchr(token, '!') != NULL) {
+    	char **syms = split_string(token, '!');
+    	return cons(ssexpand(syms[0]), cons(cons(sym_quote, cons(ssexpand(syms[1]), nil)), nil));
+    }
+
+    // dotted: x.y => (x y), x.y.z => (x (y z))
+    if (token[0] != '.' && token[strlen(token) - 1] != '.' && strchr(token, '.') != NULL) {
+    	char **syms = split_string(token, '.');
+    	atom dims = nil, dots = nil;
+    	for (int i = 0; syms[i] != NULL; i++)
+    		dims = cons(ssexpand(syms[i]), dims);
+    	for (; !no(dims); dims = cdr(dims)) {
+    		if (no(dots)) {
+    			dots = cons(car(dims), nil);
+    		} else if (!acons(car(dots)) && no(cdr(dots))) {
+    			dots = cons(car(dims), cons(car(dots), nil));
+    		} else {
+	    		dots = cons(car(dims), cons(dots, nil));
+    		}
+    	}
+    	if (acons(car(dots)) && no(cdr(dots)))
+    		dots = car(dots);
+    	return dots;
+    }
+    
+    // compose: (let x nil (++:car:push 1 x)) => (++ (car (push 1 x))) => (2)
+    if (token[0] != ':' && token[strlen(token) - 1] != ':' && strchr(token, ':') != NULL) {
+		char **syms = split_string(token, ':');
+		atom dims = nil, comps = nil;
+		for (int i = 0; syms[i] != NULL; i++)
+			dims = cons(ssexpand(syms[i]), dims);
+		for (; !no(dims); comps = cons(car(dims), comps), dims = cdr(dims));
+		return cons(sym_compose, comps);
+    }
+
+    return sym(token);
+}
+
+atom infix_expand(atom args) {
+	if (no(args)) // {} => nil
+		return nil;
+	if (no(cdr(args))) // {x} => x
+		return car(args);
+	if (no(cddr(args))) // {1 +} => exception:
+		return err("invalid infix syntax", args);
+	if (no(cdr(cddr(args)))) // {1 + 2} => (+ 1 2)
+		return cons(cadr(args), cons(car(args), cons(car(cddr(args)), nil)));
+	
+	// take first set, then process the rest {1 + 2 + 3 ...} => {(+ 1 2) + 3 ...}
+	atom result = cons(cadr(args), cons(car(args), cons(car(cddr(args)), nil)));
+	args = cdr(cddr(args));
+	
+	next_infix_set: {
+		if (car(args) == car(result)) { // same operator
+			result = builtin_add(cons(result, cons(cons(cadr(args), nil), nil)));
+			args = cddr(args);
+			if (!no(args))
+				goto next_infix_set;
+		}
+		result = infix_expand(cons(result, args)); // process remaining sets
+	}
+	
+	return result;
 }
 
 atom read_expr(FILE *stream) {
@@ -263,12 +344,16 @@ atom read_expr(FILE *stream) {
 	if (!strcmp(token, "("))
 		return read_list(stream);
 	
+	// infix: {1 + 2 / 3} => (/ (+ 1 2) 3) => 1
+	if (!strcmp(token, "{"))
+		return infix_expand(read_brace(stream));
+	
 	// anonymous functions: [list _] => (fn (_) (list _))
 	if (!strcmp(token, "[")) {
 		atom body = read_bracket(stream);
 		if (iserr(body))
 			return body;
-		return cons(sym_fn, cons(cons(sym("_"), nil), cons(body, nil)));
+		return cons(sym_fn, cons(cons(sym_wildcard, nil), cons(body, nil)));
 	}
 	
 	// strings: "This is a string, by golly!"
@@ -301,44 +386,14 @@ atom read_expr(FILE *stream) {
 	// numbers: 1, -0.5, .007, 9999999, etc.
 	if (token[strspn(token, "-.0123456789")] == '\0') {
 		if (token[strspn(token, "-.")] == '\0')
-			return sym(token);
+			return ssexpand(token);
 		return new_num(atof(token));
 	}
 	
-	// variable negation: -x => (- x)
-	if (token[0] == '-' && strlen(token) > 1)
-    	return cons(sym("-"), cons(sym(&token[1]), nil));
-    
-    // dotted: x.y => (x y)
-    if (token[0] != '.' && token[strlen(token) - 1] != '.' && strchr(token, '.') != NULL) {
-    	char **syms = split_string(token, '.');
-    	return cons(sym(syms[0]), cons(sym(syms[1]), nil));
-    }
-    
-    // dotted-quote: x!y => (x 'y)
-    if (token[0] != '!' && token[strlen(token) - 1] != '!' && strchr(token, '!') != NULL) {
-    	char **syms = split_string(token, '!');
-    	return cons(sym(syms[0]), cons(cons(sym_quote, cons(sym(syms[1]), nil)), nil));
-    }
-    
-    // compose: (let x nil (++:car:push 1 x)) => (++ (car (push 1 x))) => (2)
-    if (token[0] != ':' && token[strlen(token) - 1] != ':' && strchr(token, ':') != NULL) {
-		char **syms = split_string(token, ':');
-		atom dims = nil, comps = nil;
-		for (int i = 0; syms[i] != NULL; i++)
-			dims = cons(sym(syms[i]), dims);
-		for (; !no(dims); comps = cons(car(dims), comps), dims = cdr(dims));
-		return cons(sym("compose"), comps);
-    }
-
-	// complement: (~no t) => ((complement no) t) => ((no no) t) => t
-	if (token[0] == '~' && strlen(token) > 1)
-    	return cons(sym("complement"), cons(sym(&token[1]), nil));
-    
     // reader macros
     if (strlen(token) > 2) {
     	
-    	// characters
+    	// char *acters
 		if (token[0] == '#' && token[1] == '\\')
 			return new_char(token_to_char(token));
 		
@@ -348,15 +403,15 @@ atom read_expr(FILE *stream) {
 			if (nums[2] != NULL ||
 			    !(nums[0][strspn(nums[0], "0123456789")] == '\0') ||
 			    !(nums[1][strspn(nums[1], "0123456789")] == '\0'))
-				return sym(token);
-			return cons(sym("/"),
+				return ssexpand(token);
+			return cons(sym_divide,
 			            cons(new_num(atof(nums[0])),
 			                 cons(new_num(atof(nums[1])), nil)));
 		}
 	}
 	
-	//symbols
-	return sym(token);
+	// expand special syntax if present
+	return ssexpand(token);
 }
 
 atom read_list(FILE *stream) {
@@ -382,9 +437,18 @@ atom read_bracket(FILE *stream) {
 	return cons(read_expr(stream), read_bracket(stream));
 }
 
+atom read_brace(FILE *stream) {
+	char *token = get_token(stream);
+	if (!strcmp(token, "}")) {
+		return nil;
+	}
+	unget_token(token);
+	return cons(read_expr(stream), read_brace(stream));
+}
+
 atom read_string(FILE *stream) {
 	char c, cbuf[1024];
-	memset(cbuf, 0, 1024);
+	memset(cbuf, 0, sizeof(cbuf));
 	int n = 0;
 	while ((c = fgetc(stream)) != '\"') cbuf[n++] = c;
 	return new_string(cbuf);
@@ -392,7 +456,7 @@ atom read_string(FILE *stream) {
 
 void write_expr(FILE *stream, atom expr) {
 	if (anum(expr)) {
-		fprintf(stream, "%g", numval(expr));
+		fprintf(stream, "%.16g", numval(expr));
 	} else if (asym(expr)) {
 		fprintf(stream, "%s", symname(expr));
 	} else if (astring(expr)) {
@@ -578,13 +642,13 @@ atom eval(atom expr, atom env) {
 				if (iserr(val)) return val;
 				return env_assign_eq(env, car(args), val);
 			} else if (acons(car(args))) {
-				if (caar(args) == sym("car")) {
+				if (caar(args) == sym_car) {
 					atom place = eval(car(cdar(args)), env);
 					if (iserr(place)) return place;
 					atom val = eval(cadr(args), env);
 					if (iserr(val)) return val;
 					return car(place) = val;
-				} else if (caar(args) == sym("cdr")) {
+				} else if (caar(args) == sym_cdr) {
 					atom place = eval(car(cdar(args)), env);
 					if (iserr(place)) return place;
 					atom val = eval(cadr(args), env);
@@ -619,7 +683,7 @@ atom eval(atom expr, atom env) {
 						atom value = eval(cadr(args), env);
 						if (iserr(value)) return value;
 						if (!achar(value))
-							return err("value of a 'string' element must be a 'char'", value);
+							return err("value of a 'string' element must be a 'char *'", value);
 						stringval(iop)[(int)numval(index)] = charval(value);
 						return value;
 					}
@@ -702,6 +766,31 @@ atom coerce_char(atom val) {
 	return err("can't coerce to 'char'", val);
 }
 
+atom coerce_string(atom val) {
+	if (val == nil)
+		return new_string("");
+	atom tmp;
+	char buf[1024];
+	memset(buf, 0, 1024);
+	start_string: {
+		tmp = alist(val) ? cdr(val) : nil;
+		if (alist(val))
+			val = car(val);
+		switch (type(val)) {
+			case type_num: sprintf(buf, "%s%g", buf, numval(val)); break;
+			case type_sym: sprintf(buf, "%s%s", buf, symname(val)); break;
+			case type_string: sprintf(buf, "%s%s", buf, stringval(val)); break;
+			case type_char: sprintf(buf, "%s%c", buf, charval(val)); break;
+			default: return err("can't coerce to 'string'", val);
+		}
+		if (!no(tmp)) {
+			val = tmp;
+			goto start_string;
+		}
+	}
+	return new_string(buf);
+}
+
 atom coerce_cons(atom val) {
 	if (acons(val)) {
 		return val;
@@ -748,18 +837,18 @@ atom builtin_type(atom args) {
 	if (no(args) || !no(cdr(args)))
 		return err("invalid arguments supplied to 'type'", args);
 	switch (type(car(args))) {
-		case type_num: return sym("num");
-		case type_sym: return sym("sym");
-		case type_string: return sym("string");
-		case type_char: return sym("char");
-		case type_cons: return sym("cons");
-		case type_fn: return sym("fn");
-		case type_mac: return sym("mac");
-		case type_table: return sym("table");
-		case type_builtin: return sym("builtin");
-		case type_input: return sym("input");
-		case type_output: return sym("output");
-		case type_exception: return sym("exception");
+		case type_num: return sym_num;
+		case type_sym: return sym_sym;
+		case type_string: return sym_string;
+		case type_char: return sym_char;
+		case type_cons: return sym_cons;
+		case type_fn: return sym_fn;
+		case type_mac: return sym_mac;
+		case type_table: return sym_table;
+		case type_builtin: return sym_builtin;
+		case type_input: return sym_input;
+		case type_output: return sym_output;
+		case type_exception: return sym_exception;
 	}
 	return err("unknown type of atom", car(args));
 }
@@ -788,7 +877,7 @@ atom builtin_help(atom args) {
 }
 
 atom builtin_add(atom args) {
-	if (no(args) || !(anum(car(args)) || astring(car(args))))
+	if (no(args) || !(anum(car(args)) || (no(car(args)) || acons(car(args))) || astring(car(args))))
 		return err("invalid arguments supplied to '+'", args);
 	if (anum(car(args))) {
 		for (atom p = args; !no(p); p = cdr(p))
@@ -797,6 +886,22 @@ atom builtin_add(atom args) {
 		double sum;
 		for(sum = 0; !no(args); sum += numval(car(args)), args = cdr(args));
 		return new_num(sum);
+	} else if (no(car(args)) || acons(car(args))) {
+		if (no(car(args))) {
+			if (no(cddr(args)))
+				return cadr(args);
+			return builtin_add(cdr(args));
+		}
+		atom dims;
+		if (no(cddr(args))) {
+			dims = builtin_add(cons(cdar(args), cons(cadr(args), nil)));
+		} else {
+			atom tmp = builtin_add(cdr(args));
+			if (iserr(tmp)) return tmp;
+			dims = builtin_add(cons(cdar(args), cons(tmp, nil)));
+		}
+		if (iserr(dims)) return dims;
+		return cons(caar(args), dims);
 	} else if (astring(car(args))) {
 		for (atom p = args; !no(p); p = cdr(p))
 			if (!astring(car(p)))
@@ -922,32 +1027,9 @@ atom builtin_trunc(atom args) {
 
 atom builtin_shl(atom args) {
 	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !anum(car(args)) || !anum(cadr(args)))
-		return err("invalid arguments supplied to 'shl'", args);
+		return err("invalid arguments supplied to 'sh'", args);
 	return new_num((double)((long long)numval(car(args)) <<
 	                        (long long)numval(cadr(args))));
-}
-
-atom builtin_string(atom args) {
-	if (no(args))
-		return err("invalid arguments supplied to 'string'", args);
-	char buf[1024];
-	memset(buf, 0, sizeof(buf));
-	for (; !no(args); args = cdr(args)) {
-		if (alist(car(args))) {
-			atom val = builtin_string(car(args));
-			if (iserr(val)) return val;
-			sprintf(buf, "%s%s", buf, stringval(val));
-		} else {
-			switch (type(car(args))) {
-				case type_num: sprintf(buf, "%s%g", buf, numval(car(args))); break;
-				case type_sym: sprintf(buf, "%s%s", buf, symname(car(args))); break;
-				case type_string: sprintf(buf, "%s%s", buf, stringval(car(args))); break;
-				case type_char: sprintf(buf, "%s%c", buf, charval(car(args))); break;
-				default: return err("can't coerce to 'string'", car(args));
-			}
-		}
-	}
-	return new_string(buf);
 }
 
 atom builtin_newstring(atom args) {
@@ -972,25 +1054,25 @@ atom builtin_coerce(atom args) {
 	if (no(args) || no(cdr(args)) || !asym(cadr(args)))
 		return err("invalid arguments supplied to 'coerce'", args);
 	atom val = car(args), type = cadr(args);
-	if (type == sym("num"))
+	if (type == sym_num)
 		return coerce_num(val);
-	else if (type == sym("sym"))
+	else if (type == sym_sym)
 		return coerce_sym(val);
-	else if (type == sym("string"))
-		return builtin_string(cons(val, nil));
-	else if (type == sym("char"))
+	else if (type == sym_string)
+		return coerce_string(val);
+	else if (type == sym_char)
 		return coerce_char(val);
-	else if (type == sym("cons") || type == sym("list"))
+	else if (type == sym_cons || type == sym_list)
 		return coerce_cons(val);
-	else if (type == sym("table"))
+	else if (type == sym_table)
 		return coerce_table(val);
 	return err("can't coerce to type", type);
 }
 
 atom builtin_apply(atom args) {
-	if (no(args) || no(cdr(args)) || !no(cddr(args)))
+	if (no(args) || no(cdr(args)) || !no(cddr(args)) || !alist(cadr(args)))
 		return err("invalid arguments supplied to 'apply'", args);
-	return apply(car(args), cdr(args));
+	return apply(car(args), cadr(args));
 }
 
 atom builtin_eval(atom args) {
@@ -1038,6 +1120,8 @@ atom builtin_readb(atom args) {
 	else if (!no(cdr(args)) || !isinput(car(args)))
 		return err("invalid arguments supplied to 'readb'", args);
 	else stream = stream(car(args));
+	if (stream == NULL)
+		return err("input is closed", !no(args) ? car(args) : nil);
 	return new_num((double)fgetc(stream));
 }
 
@@ -1048,6 +1132,8 @@ atom builtin_readc(atom args) {
 	else if (!no(cdr(args)) || !isinput(car(args)))
 		return err("invalid arguments supplied to 'readc'", args);
 	else stream = stream(car(args));
+	if (stream == NULL)
+		return err("input is closed", !no(args) ? car(args) : nil);
 	return new_char(fgetc(stream));
 }
 
@@ -1058,6 +1144,8 @@ atom builtin_peekc(atom args) {
 	else if (!no(cdr(args)) || !isinput(car(args)))
 		return err("invalid arguments supplied to 'peekc'", args);
 	else stream = stream(car(args));
+	if (stream == NULL)
+		return err("input is closed", !no(args) ? car(args) : nil);
 	char val = fgetc(stream);
 	ungetc(val, stream);
 	return new_char(val);
@@ -1070,6 +1158,8 @@ atom builtin_readline(atom args) {
 	else if (!no(cdr(args)) || !isinput(car(args)))
 		return err("invalid arguments supplied to 'readline'", args);
 	else stream = stream(car(args));
+	if (stream == NULL)
+		return err("input is closed", !no(args) ? car(args) : nil);
 	char buf[1024];
 	int i;
 	memset(buf, 0, 1024);
@@ -1087,6 +1177,8 @@ atom builtin_sread(atom args) {
 	else if (!no(cdr(args)) || !isinput(car(args)))
 		return err("invalid arguments supplied to 'sread'", args);
 	else stream = stream(car(args));
+	if (stream == NULL)
+		return err("input is closed", !no(args) ? car(args) : nil);
 	return read_expr(stream);
 }
 
@@ -1115,6 +1207,8 @@ atom builtin_disp(atom args) {
 	else if (!isoutput(cadr(args)) || !no(cddr(args)))
 		return err("invalid arguments supplied to 'disp'", args);
 	else stream = stream(cadr(args));
+	if (stream == NULL)
+		return err("output is closed", !no(args) ? car(args) : nil);
 	if (astring(car(args)))
 		fprintf(stream, "%s", stringval(car(args)));
 	else if (achar(car(args))) 
@@ -1133,6 +1227,8 @@ atom builtin_write(atom args) {
 	else if (!isoutput(cadr(args)) || !no(cddr(args)))
 		return err("invalid arguments supplied to 'write'", args);
 	else stream = stream(cadr(args));
+	if (stream == NULL)
+		return err("output is closed", !no(args) ? car(args) : nil);
 	write_expr(stream, car(args));
 	return nil;
 }
@@ -1146,6 +1242,8 @@ atom builtin_writeb(atom args) {
 	else if (!isoutput(cadr(args)) || !no(cddr(args)))
 		return err("invalid arguments supplied to 'writeb'", args);
 	else stream = stream(cadr(args));
+	if (stream == NULL)
+		return err("output is closed", !no(args) ? car(args) : nil);
 	fputc((unsigned char)numval(car(args)), stream);
 	return nil;
 }
@@ -1159,6 +1257,8 @@ atom builtin_writec(atom args) {
 	else if (!isoutput(cadr(args)) || !no(cddr(args)))
 		return err("invalid arguments supplied to 'writeb'", args);
 	else stream = stream(cadr(args));
+	if (stream == NULL)
+		return err("output is closed", !no(args) ? car(args) : nil);
 	fputc(charval(car(args)), stream);
 	return nil;
 }
@@ -1170,6 +1270,12 @@ atom builtin_infile(atom args) {
 	return new_input(stream);
 }
 
+atom builtin_instring(atom args) {
+	if (no(args) || !astring(car(args)))
+		return err("invalid arguments supplied to 'instring'", args);
+	return new_input(fmemopen(stringval(car(args)), strlen(stringval(car(args))), "r"));
+}
+
 atom builtin_outfile(atom args) {
 	if (no(args) || !astring(car(args)) || (!no(cdr(args)) && !asym(cadr(args))))
 		return err("invalid arguments supplied to 'outfile'", args);
@@ -1177,10 +1283,27 @@ atom builtin_outfile(atom args) {
 	return new_output(stream);
 }
 
+atom builtin_outstring(atom args) {
+	if (!no(args))
+		return err("invalid arguments supplied to 'outstring'", args);
+	atom result = make(type_output);
+	outbuf(result) = calloc(0, 1024);
+	stream(result) = fmemopen(outbuf(result), 1024, "a");
+	return result;
+}
+
+atom builtin_inside(atom args) {
+	if (no(args) || !no(cdr(args)) || !isoutput(car(args)))
+		return err("invalid arguments supplied to 'inside'", args);
+	if (outbuf(car(args)) == NULL)
+		return new_string("");
+	return new_string(outbuf(car(args)));
+}
+
 atom builtin_close(atom args) {
-	if (no(args) || !no(cdr(args)) || !isinput(car(args)) || !isoutput(car(args)))
+	if (no(args) || !(isoutput(car(args)) || isinput(car(args))))
 		return err("invalid arguments supplied to 'close'", args);
-	fclose(stream(car(args)));
+	fclose(car(args));
 	return nil;
 }
 
@@ -1188,31 +1311,49 @@ void arc_init() {
 	nil = new_sym("nil");
 	syms = cons(nil, nil);
 	root = cons(nil, nil);
+	sym_num = sym("num");
+	sym_sym = sym("sym");
+	sym_char = sym("char");
+	sym_string = sym("string");
+	sym_cons = sym("cons");
+	sym_fn = sym("fn");
+	sym_mac = sym("mac");
+	sym_table = sym("table");
+	sym_list = sym("list");
+	sym_exception = sym("exception");
+	sym_builtin = sym("builtin");
+	sym_input = sym("input");
+	sym_output = sym("output");
 	sym_quote = sym("quote");
 	sym_quasiquote = sym("quasiquote");
 	sym_unquote = sym("unquote");
 	sym_unquote_expand = sym("unquote-expand");
 	sym_if = sym("if");
 	sym_is = sym("is");
+	sym_car = sym("car");
+	sym_cdr = sym("cdr");
 	sym_while = sym("while");
 	sym_assign = sym("assign");
 	sym_bound = sym("bound");
-	sym_fn = sym("fn");
-	sym_mac = sym("mac");
 	sym_optional = sym("o");
+	sym_wildcard = sym("_");
+	sym_minus = sym("-");
+	sym_divide = sym("/");
+	sym_compose = sym("compose");
+	sym_complement = sym("complement");
 	env_assign(root, t = sym("t"), t);
-	env_assign(root, sym("cons"), new_builtin(builtin_cons, ""));
-	env_assign(root, sym("car"), new_builtin(builtin_car, ""));
-	env_assign(root, sym("cdr"), new_builtin(builtin_cdr, ""));
+	env_assign(root, sym_cons, new_builtin(builtin_cons, ""));
+	env_assign(root, sym_car, new_builtin(builtin_car, ""));
+	env_assign(root, sym_cdr, new_builtin(builtin_cdr, ""));
 	env_assign(root, sym("type"), new_builtin(builtin_type, ""));
 	env_assign(root, sym("err"), new_builtin(builtin_err, ""));
 	env_assign(root, sym("help"), new_builtin(builtin_help, ""));
 	env_assign(root, sym("apply"), new_builtin(builtin_apply, ""));
 	env_assign(root, sym("eval"), new_builtin(builtin_eval, ""));
 	env_assign(root, sym("+"), new_builtin(builtin_add, ""));
-	env_assign(root, sym("-"), new_builtin(builtin_sub, ""));
+	env_assign(root, sym_minus, new_builtin(builtin_sub, ""));
 	env_assign(root, sym("*"), new_builtin(builtin_mul, ""));
-	env_assign(root, sym("/"), new_builtin(builtin_div, ""));
+	env_assign(root, sym_divide, new_builtin(builtin_div, ""));
 	env_assign(root, sym("<"), new_builtin(builtin_lt, ""));
 	env_assign(root, sym(">"), new_builtin(builtin_gt, ""));
 	env_assign(root, sym("cos"), new_builtin(builtin_cos, ""));
@@ -1224,9 +1365,8 @@ void arc_init() {
 	env_assign(root, sym("sqrt"), new_builtin(builtin_sqrt, ""));
 	env_assign(root, sym("tan"), new_builtin(builtin_tan, ""));
 	env_assign(root, sym("trunc"), new_builtin(builtin_trunc, ""));
-	env_assign(root, sym("shl"), new_builtin(builtin_shl, ""));
-	env_assign(root, sym("table"), new_builtin(table, ""));
-	env_assign(root, sym("string"), new_builtin(builtin_string, ""));
+	env_assign(root, sym("sh"), new_builtin(builtin_shl, ""));
+	env_assign(root, sym_table, new_builtin(table, ""));
 	env_assign(root, sym("newstring"), new_builtin(builtin_newstring, ""));
 	env_assign(root, sym("coerce"), new_builtin(builtin_coerce, ""));
 	env_assign(root, sym("len"), new_builtin(builtin_len, ""));
@@ -1244,9 +1384,14 @@ void arc_init() {
 	env_assign(root, sym("writeb"), new_builtin(builtin_writeb, ""));
 	env_assign(root, sym("writec"), new_builtin(builtin_writec, ""));
 	env_assign(root, sym("infile"), new_builtin(builtin_infile, ""));
+	env_assign(root, sym("instring"), new_builtin(builtin_instring, ""));
 	env_assign(root, sym("outfile"), new_builtin(builtin_outfile, ""));
+	env_assign(root, sym("outstring"), new_builtin(builtin_outstring, ""));
+	env_assign(root, sym("inside"), new_builtin(builtin_inside, ""));
 	env_assign(root, sym("close"), new_builtin(builtin_close, ""));
-	arc_load_file("arc.arc");
+	
+	// load library files
+	arc_load_file("lib/core.arc");
 }
 
 int main(int argc, char **argv) {
