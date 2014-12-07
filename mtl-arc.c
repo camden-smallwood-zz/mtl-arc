@@ -1349,7 +1349,7 @@ void arc_init() {
 	sym_complement = sym("complement");
 	env_assign(root, t = sym("t"), t);
 	env_assign(root, sym("nan"), new_num(atof("NaN")));
-	env_assign(root, sym("pi"), new_num(M_PI));
+	env_assign(root, sym("pi"), new_num(3.14159265358979323846264338327));
 	env_assign(root, sym_cons, new_builtin(builtin_cons, ""));
 	env_assign(root, sym_car, new_builtin(builtin_car, ""));
 	env_assign(root, sym_cdr, new_builtin(builtin_cdr, ""));
