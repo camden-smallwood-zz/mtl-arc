@@ -322,8 +322,14 @@ atom infix_expand(atom args) {
 	atom result = cons(cadr(args), cons(car(args), cons(car(cddr(args)), nil)));
 	args = cdr(cddr(args));
 	
+	// group contiguous sets of the same function as one expression:
+	//  i.e.: {1 + 2 + 3 - 4 - 5}
+	//      to this => (- (+ 1 2 3) 4 5)
+	//   instead of => (- (- (+ (+ 1 2) 3) 4) 5)
 	next_infix_set: {
-		if (car(args) == car(result)) { // same operator
+		if (car(args) == car(result)) { // same function
+			// append the argument to the current parameter list,
+			// then process the remaining sets (if available).
 			result = builtin_add(cons(result, cons(cons(cadr(args), nil), nil)));
 			args = cddr(args);
 			if (!no(args))
@@ -1342,6 +1348,8 @@ void arc_init() {
 	sym_compose = sym("compose");
 	sym_complement = sym("complement");
 	env_assign(root, t = sym("t"), t);
+	env_assign(root, sym("nan"), new_num(atof("NaN")));
+	env_assign(root, sym("pi"), new_num(M_PI));
 	env_assign(root, sym_cons, new_builtin(builtin_cons, ""));
 	env_assign(root, sym_car, new_builtin(builtin_car, ""));
 	env_assign(root, sym_cdr, new_builtin(builtin_cdr, ""));
