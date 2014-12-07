@@ -29,12 +29,11 @@
 (def no (x)
   {x is nil})
 
-(def isa (a b)
-  {type.a is b})
+(mac isa (a b)
+  `{(type ,a) is ',b})
 
 (def acons (x)
- "Is 'x' a cons?"
-  {x isa 'cons})
+  {x isa cons})
 
 (def alist (x)
  "Is 'x' a (possibly empty) list?"
@@ -49,7 +48,7 @@
 
 (def pair (xs (o f list))
   (if no.xs nil
-      (no cdr.xs)
+      no.cdr.xs
         (list (list car.xs))
       (cons (f car.xs cadr.xs)
             (pair cddr.xs f))))
@@ -65,6 +64,16 @@
               {result = {result + (cons car.seq (join:cons cdr.seq cdr.arg))}}))))
       {args = cdr.args})
     result))
+
+(def assoc (key al)
+  (if atom.al
+        nil
+      {acons.car.al and {caar.al is key}}
+        car.al
+      (assoc key cdr.al)))
+
+(def alref (al key)
+  (cadr:assoc key al))
 
 (mac with (decls . body)
   `((fn ,(map1 car pair.decls)
@@ -84,13 +93,19 @@
   `(let ,var ,val ,@body ,var))
 
 (mac as (a b)
-  `(coerce ,b ',a))
+  `(coerce ,a ',b))
+
+(def num (x)
+  {x as num})
 
 (def sym (x)
-  (as sym x))
+  {x as sym})
+
+(def char (x)
+  {x as char})
 
 (def string args
-  {(as string car.args) + (as string cdr.args)})
+  {{car.args as string} + {cdr.args as string}})
 
 (mac ++ (place)
   `{,place = {,place + 1}})
@@ -141,21 +156,16 @@
             `(recur ,var))))))
 
 (mac up (v init max . body)
-"Counts 'v' up from 'init' (inclusive) to 'max' (exclusive), running 'body'
-with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
   `(for ,v ,init {,v < ,max} {,v = {,v + 1}}
      ,@body))
 
 (mac down (v init min . body)
-"Counts 'v' down from 'init' (inclusive) to 'min' (exclusive), running 'body'
-with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
   `(for ,v ,init {,v > ,min} {,v = {,v - 1}}
      ,@body))
 
 (mac repeat (n . body)
-"Runs 'body' expression by expression 'n' times."
-  (w/uniq gi
-    `(up ,gi 0 ,n
+  (w/uniq g
+    `(up ,g 0 ,n
        ,@body)))
 
 (mac forlen (var s . body)
@@ -165,7 +175,7 @@ with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
 
 (def walk (seq f)
 "Calls function 'f' on each element of 'seq'. See also [[map]]."
-  (if (isa seq 'string)
+  (if {seq isa string}
         (forlen i seq f.seq.i)
       (loop (l seq)
         (when acons.l
@@ -184,7 +194,7 @@ with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
     {i < len.s and {test.i or (recur {i + 1})}}))
 
 (def testify (x)
-  (if {x isa 'fn} x [is _ x]))
+  (if {x isa fn} x [is _ x]))
 
 (def some (test seq)
   (let f testify.test
@@ -197,7 +207,7 @@ with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
   (~some (complement testify.test) seq))
 
 (def map (f . seqs)
-  (if (some [isa _ 'string] seqs)
+  (if (some [isa _ string] seqs)
         (withs (n (apply min (map1 len seqs))
                 new (newstring n))
           (loop (i 0)
@@ -255,3 +265,105 @@ with each value. Can also (break) and (continue) inside 'body'; see [[for]]."
 (mac complement (f)
   (w/uniq g
     `(fn ,g (no:apply ,f ,g))))
+
+(def rev (xs)
+  (loop (xs xs acc nil)
+    (if no.xs acc
+      (recur cdr.xs (cons car.xs acc)))))
+
+(mac in (x . choices)
+  (w/uniq g
+    `(let ,g ,x
+       (or ,@(map1 [is ,g _] choices)))))
+
+{atom = [in _ 'num 'sym 'char 'string]}
+
+(def iso (x y)
+  {{x is y} or {acons.x and acons.y and
+                {car.x iso car.y} and
+                {cdr.x iso cdr.y}}})
+
+{carif = [if acons._ car._ _]}
+
+(def some (test seq)
+  (let f testify.test
+    (if {seq isa string}
+          (recstring f:seq seq)
+        (reclist f:carif seq))))
+
+(def all (test seq)
+  (~some (complement testify.test) seq))
+
+(mac check (x test (o alt))
+  (w/uniq gx
+    `(let ,gx ,x
+       (if (,test ,gx)
+             ,gx
+           ,alt))))
+
+(mac acheck (x test (o alt))
+  `(let it ,x
+     (if (,test it)
+           it
+         ,alt)))
+
+(def find (test seq)
+  (let f testify.test
+    (reclist [check carif._ f] seq)))
+
+(def mem (test seq)
+  (let f testify.test
+    (reclist [if (f:carif _) _] seq)))
+
+(def mappend (f . args)
+  (let result nil
+    (while args
+      (let arg car.args
+        {result = {result + (join:map f arg)}})
+      {args = cdr.args})
+    result))
+
+(def subst (old new seq)
+"Returns a copy of 'seq' with all values of 'old' replaced with 'new'."
+  (map [if (testify.old _)
+             (if {new isa fn}
+                   new._
+                 new)
+           _]
+       seqs))
+
+(def firstn (n xs)
+"Returns the first 'n' elements of 'xs'."
+  (if no.n
+        xs
+      {n > 0 and xs}
+        (cons car.xs (firstn {n - 1} cdr.xs))
+      nil))
+
+(def lastn (n xs)
+"Returns the last 'n' elements of 'xs'."
+  (rev:firstn n rev.xs))
+
+(def nthcdr (n xs)
+"Returns all but the first 'n' elements of 'xs'."
+  (if no.n
+        xs
+      {n > 0}
+        (nthcdr {n - 1} cdr.xs)
+      xs))
+
+(def lastcons (xs)
+"Returns the absolute last link of list 'xs'. Save this value to efficiently append to 'xs'."
+  (if cdr.xs
+        (lastcons cdr.xs)
+      xs))
+
+(def tuples (xs (o n 2))
+"Splits 'xs' up into lists of size 'n'. Generalization of [[pair]]."
+  (if no.xs
+        nil
+      (cons (firstn n xs)
+            (tuples (nthcdr n xs) n))))
+
+(def caris (x val)
+  {acons.x and {car.x is val}})
