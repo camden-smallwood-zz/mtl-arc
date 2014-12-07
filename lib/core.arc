@@ -489,59 +489,7 @@ Matches 'expr' to the first satisfying 'test' and runs the corresponding 'then' 
 "Adds 'x' to the start of the sequence at 'place'."
   `{,place = (cons ,x ,place)})
 
-(mac swap (place1 place2)
-"Exchanges the values of 'place1' and 'place2'."
-  (w/uniq (g1 g2)
-    (with ((binds1 val1 setter1) (setforms place1)
-           (binds2 val2 setter2) (setforms place2))
-      `(atwiths ,(+ binds1 (list g1 val1) binds2 (list g2 val2))
-         (,setter1 ,g2)
-         (,setter2 ,g1)))))
-
-(mac rotate places
-"Like [[swap]] but for more than two places.
-For example, after (rotate place1 place2 place3), place3 is moved to place2,
-place2 to place1, and place1 to place3."
-  (with (vars (map [uniq] places)
-         forms (map setforms places))
-    `(atwiths ,(mappend (fn (g (binds val setter))
-                          (+ binds (list g val)))
-                        vars
-                        forms)
-       ,@(map (fn (g (binds val setter))
-                (list setter g))
-              (+ (cdr vars) (list (car vars)))
-              forms))))
-
-(mac pop (place)
-"Opposite of [[push]]: removes the first element of the sequence at 'place' and returns it."
-  (w/uniq g
-    (let (binds val setter) (setforms place)
-      `(atwiths ,(+ binds (list g val))
-         (do1 (car ,g)
-              (,setter (cdr ,g)))))))
-
 (def adjoin (x xs)
   (if (some x xs)
     xs
     (cons x xs)))
-
-(mac pushnew (x place)
-"Like [[push]] but first checks if 'x' is already present in 'place'."
-  (let (binds val setter) (setforms place)
-    `(atwiths ,binds
-       (,setter (adjoin ,x ,val)))))
-
-(mac pull (test place)
-"Removes all elements from 'place' that satisfy 'test'."
-  (let (binds val setter) (setforms place)
-    `(atwiths ,binds
-       (,setter (rem ,test ,val)))))
-
-(mac togglemem (x place)
-  (w/uniq gx
-    (let (binds val setter) (setforms place)
-      `(atwiths ,(+ (list gx x) binds)
-         (,setter (if (mem ,gx ,val)
-                    (rem ,gx ,val)
-                    (adjoin ,gx ,val)))))))
