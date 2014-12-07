@@ -1309,7 +1309,7 @@ atom builtin_inside(atom args) {
 atom builtin_close(atom args) {
 	if (no(args) || !(isoutput(car(args)) || isinput(car(args))))
 		return err("invalid arguments supplied to 'close'", args);
-	fclose(car(args));
+	fclose(stream(car(args)));
 	return nil;
 }
 
