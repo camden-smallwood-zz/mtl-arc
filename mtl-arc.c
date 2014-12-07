@@ -1397,13 +1397,15 @@ void arc_init() {
 	env_assign(root, sym("outstring"), new_builtin(builtin_outstring, ""));
 	env_assign(root, sym("inside"), new_builtin(builtin_inside, ""));
 	env_assign(root, sym("close"), new_builtin(builtin_close, ""));
-	
+
 	// load library files
 	arc_load_file("lib/core.arc");
 }
 
 int main(int argc, char **argv) {
-	puts("  mtl-arc v0.4\n================");
+	puts("================================");
+	puts("          MTL-Arc v0.5");
+	puts("================================");
 	arc_init();
 	for(;;) {
 		printf("%s", "> ");

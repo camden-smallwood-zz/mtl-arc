@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "stdioext.h"
 
 typedef enum {
 	type_num, type_sym, type_string, type_char, type_cons,

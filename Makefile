@@ -1,5 +1,5 @@
 all:
-	gcc -o mtl-arc *.c -std=c11 -D_GNU_SOURCES -lm
+	gcc -o mtl-arc mtl-arc.c -std=gnu11 -lm
 
 clean:
 	rm mtl-arc
