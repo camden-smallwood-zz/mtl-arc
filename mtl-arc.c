@@ -1408,9 +1408,8 @@ int main(int argc, char **argv) {
 	puts("================================");
 	arc_init();
 	for(;;) {
-		printf("%s", "> ");
+		printf("%s", "arc> ");
 		atom result = eval(read_expr(stdin), root);
-		printf("%s", "=> ");
 		write_expr(stdout, result);
 		puts("");
 	}

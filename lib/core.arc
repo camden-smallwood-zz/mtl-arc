@@ -281,7 +281,7 @@
 (mac in (x . choices)
   (w/uniq g
     `(let ,g ,x
-       (or ,@(map1 [is ,g _] choices)))))
+       (or ,@(map1 [do `{,g is ,_}] choices)))))
 
 {atom = [in _ 'num 'sym 'char 'string]}
 
@@ -415,16 +415,27 @@
       `(let it ,car.args
          {it and (aand ,@cdr.args)})))
 
-(def <= args
-  {no.args or no.cdr.args or
-   {(no {car.args > cadr.args}) and
-    (apply <= cdr.args)}})
+(mac <= args {
+  no.args or no.cdr.args or `{
+    ,car.args ~> ,cadr.args and (<= ,@cdr.args)
+  }
+})
 
-(def >= args
-"Is each element of 'args' greater than or equal to all following elements?"
-  {no.args or no.cdr.args or
-   {(no {car.args < cadr.args}) and
-    (apply >= cdr.args)}})
+;(def <= args
+;  {no.args or no.cdr.args or
+;   {{car.args no:> cadr.args} and
+;    (apply <= cdr.args)}})
+
+(mac >= args {
+  no.args or no.cdr.args or `{
+    ,car.args ~< ,cadr.args and (>= ,@cdr.args)
+  }
+})
+
+;(def >= args
+;  {no.args or no.cdr.args or
+;   {{car.args no:< cadr.args} and
+;    (apply >= cdr.args)}})
 
 (def range-bounce (i max)
   (if no.i
@@ -493,3 +504,8 @@ Matches 'expr' to the first satisfying 'test' and runs the corresponding 'then' 
   (if (some x xs)
     xs
     (cons x xs)))
+
+{copy = [if atom._
+	    _
+	    (cons copy.car._
+		  copy.cdr._)]}
