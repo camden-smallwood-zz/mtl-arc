@@ -107,8 +107,15 @@
 (def string args
   {{car.args as string} + {cdr.args as string}})
 
-(mac ++ (place)
-  `{,place = {,place + 1}})
+(def sref (object value index)
+  (if {object isa cons}
+        {(car (nthcdr index object)) = value}
+      {{object isa string} or {object isa table}}
+        {object.index = value}
+      value))
+
+(mac ++ (place (o i 1))
+  `{,place = {,place + ,i}})
 
 (mac and args
   (if args
@@ -408,6 +415,17 @@
       `(let it ,car.args
          {it and (aand ,@cdr.args)})))
 
+(def <= args
+  {no.args or no.cdr.args or
+   {(no {car.args > cadr.args}) and
+    (apply <= cdr.args)}})
+
+(def >= args
+"Is each element of 'args' greater than or equal to all following elements?"
+  {no.args or no.cdr.args or
+   {(no {car.args < cadr.args}) and
+    (apply >= cdr.args)}})
+
 (def range-bounce (i max)
   (if no.i
         max
@@ -440,7 +458,7 @@
                 nil
               f.car.s
                 recur.cdr.s
-              (cons car.s recur.cdr.s)))))
+              (cons car.s recur.cdr.s))))))
 
 (def keep (test seq)
 "Returns all elements of 'seq' for which 'test' passes."
@@ -469,11 +487,7 @@ Matches 'expr' to the first satisfying 'test' and runs the corresponding 'then' 
 
 (mac push (x place)
 "Adds 'x' to the start of the sequence at 'place'."
-  (w/uniq gx
-    (let (binds val setter) (setforms place)
-      `(let ,gx ,x
-         (atwiths ,binds
-           (,setter (cons ,gx ,val)))))))
+  `{,place = (cons ,x ,place)})
 
 (mac swap (place1 place2)
 "Exchanges the values of 'place1' and 'place2'."
