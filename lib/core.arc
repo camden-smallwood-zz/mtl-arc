@@ -337,7 +337,7 @@
                    new._
                  new)
            _]
-       seqs))
+       seq))
 
 (def firstn (n xs)
 "Returns the first 'n' elements of 'xs'."
@@ -362,7 +362,7 @@
 (def lastcons (xs)
 "Returns the absolute last link of list 'xs'. Save this value to efficiently append to 'xs'."
   (if cdr.xs
-        (lastcons cdr.xs)
+        lastcons.cdr.xs
       xs))
 
 (def tuples (xs (o n 2))
