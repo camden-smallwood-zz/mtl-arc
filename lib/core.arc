@@ -107,7 +107,7 @@ Examples:
   ((fn (pairs)
      `((fn ,(map1 car pairs) ,@body)
         ,@(map1 cadr pairs)))
-    pair.decls))
+    pair.parms))
 
 (mac let (var val . body)
 "Like 'with', but with just one binding."
