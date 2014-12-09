@@ -47,7 +47,7 @@ atom new_sym(const char *sym) {
 	    strchr(sym, '\t') != NULL ||
 	    strchr(sym, '\r') != NULL ||
 	    strchr(sym, '\n') != NULL)
-		return err("sym names may not contain whitespace char *acters", nil);
+		return err("sym names may not contain whitespace characters", nil);
 	if (sym[strspn(sym, "0123456789")] == '\0')
 		return err("sym names may not consist of only numbers", nil);
 	atom result = make(type_sym);
@@ -88,7 +88,7 @@ atom new_closure(atom args, atom body, atom env) {
 		if (type(car(p)) == type_cons && car(car(p)) != sym_optional)
 			return err("invalid syntax in closure argument", car(p));
 	}
-	
+
 	return cons(env, cons(args, body));
 }
 
