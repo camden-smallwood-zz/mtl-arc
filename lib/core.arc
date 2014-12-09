@@ -102,37 +102,46 @@ Examples:
 "Returns the value of 'key' in an association list 'al' of (key value) pairs."
   (cadr:assoc key al))
 
-(mac with (decls . body)
+(mac with (parms . body)
+"Evaluates each expression in 'body' unders the bindings provided in 'parms'."
   ((fn (pairs)
      `((fn ,(map1 car pairs) ,@body)
         ,@(map1 cadr pairs)))
     pair.decls))
 
 (mac let (var val . body)
+"Like 'with', but with just one binding."
   `(with (,var ,val) ,@body))
 
 (mac withs (parms . body)
-  (if no.parms
-    `(do ,@body)
-    `(let ,car.parms ,cadr.parms
-       (withs ,cddr.parms ,@body))))
+"Like 'with', but later variables in 'parms' can refer to earlier vaiables in 'parms'."
+  (if (no parms)
+        `(do ,@body)
+      `(let ,car.parms ,cadr.parms
+         (withs ,cddr.parms ,@body))))
 
 (mac ret (var val . body)
+"Like 'let', but returns 'val' instead of the result of the last expression in 'body'."
   `(let ,var ,val ,@body ,var))
 
 (mac as (a b)
-  `(coerce ,a ',b))
+"Tries to coerce 'a' to type 'b'. 'b' may be quoted or unquoted."
+  `(coerce ,a ,(if {b isa cons} b `',b)))
 
 (def num (x)
+"Tries to coerce 'x' into a number."
   {x as num})
 
 (def sym (x)
+"Tries to coerce 'x' into a symbol."
   {x as sym})
 
 (def char (x)
+"Tries to coerce 'x' into a character."
   {x as char})
 
 (def string args
+"Tries to coerce and append each of 'args' into a new string."
   {{car.args as string} + {cdr.args as string}})
 
 (def sref (object value index)
