@@ -1,84 +1,112 @@
 ; MTL-Arc Core Library
 
 (mac = (a b)
+"Assigns 'a' to 'b'."
   (cons 'assign (cons a (cons b nil))))
 
-{list = (fn args args)}
-{caar = [car car._]}
-{cadr = [car cdr._]}
-{cdar = [cdr car._]}
-{cddr = [cdr cdr._]}
-{cadar = [car cdar._]}
+{no = (fn (x)
+"Checks to see if 'x' is nil."
+  (is x nil))}
+
+{list = (fn args
+"Creates a new list out of 'args'."
+  (if (no args)
+        nil
+      (cons car.args (apply list cdr.args))))}
+
+{caar = (fn (x)
+"Equivalent to (car (car x))"
+  car.car.x)}
+
+{cadr = (fn (x)
+"Equivalent to (car (cdr x)). Returns the second element of list 'x'."
+  car.cdr.x)}
+
+{cdar = (fn (x)
+"Equivalent to (cdr (car x))"
+  cdr.car.x)}
+
+{cddr = (fn (x)
+"Equivalent to (cdr (cdr x)). Returns all but the first two elements of list 'x'."
+  cdr.cdr.x)}
+
+{cadar = (fn (x)
+"Equivalent to (car (cdar x))"
+  car.cdar.x)}
 
 (mac quasiquote (x)
+"Like 'quote', but allows inserting and concatenation of outside variables via 'unquote [,]' and 'unquote-expand [,@]'"
   (if {type.x is 'cons}
-    (if {car.x is 'unquote} cadr.x
-      (if (if {type.car.x is 'cons}
-            {caar.x is 'unquote-expand})
-        (list '+ cadar.x (list 'quasiquote cdr.x))
-        (list 'cons (list 'quasiquote car.x)
-                          (list 'quasiquote cdr.x))))
-    (list 'quote x)))
+        (if {car.x is 'unquote}
+              cadr.x
+            (if (if {type.car.x is 'cons}
+                      (is caar.x 'unquote-expand))
+                  (list '+ cadar.x (list 'quasiquote cdr.x))
+                (list 'cons (list 'quasiquote car.x)
+                            (list 'quasiquote cdr.x))))
+      (list 'quote x)))
 
 (mac do body
+"Evaluates each expression in 'body'."
   `((fn () ,@body)))
 
 (mac def (name args . body)
+"Associates 'name' with a new function with arguments 'args' that evaluates each expression in 'body'."
   `{,name = (fn ,args ,@body)})
 
-(def no (x)
-  {x is nil})
-
 (mac isa (a b)
-  `{(type ,a) is ',b})
+"Checks to see if 'a' is of type 'b'. 'b' may be a quoted or unquoted symbol.
+Examples:
+  (isa 0 num) => t
+  (isa 0 'num) => t
+  (isa 0 sym) => nil"
+  `(is (type ,a) ,(if {type.b is 'cons} b `',b)))
 
 (def acons (x)
+"Checks to see if 'x' is a cons."
   {x isa cons})
 
 (def alist (x)
- "Is 'x' a (possibly empty) list?"
+"Checks to see if 'x' is a (possibly empty) list."
   {no.x or acons.x})
 
-(def idfn (x) x)
+(def idfn (x)
+"Takes in an returns 'x'."
+  x)
 
-(def map1 (f xs)
-  (if no.xs nil
-    (cons (f car.xs)
-          (map1 f cdr.xs))))
+(def map1 (f x)
+"Creates a copy of list 'x' with function 'f' applied to each element."
+  (if (no x)
+        nil
+      (cons (f car.x)
+            (map1 f cdr.x))))  
 
-(def pair (xs (o f list))
-  (if no.xs nil
-      no.cdr.xs
-        (list (list car.xs))
-      (cons (f car.xs cadr.xs)
-            (pair cddr.xs f))))
-
-(def join args
-  (let result nil
-    (while args
-      (let arg car.args
-        (if no.arg nil
-          (let seq car.arg
-            (if no.seq
-              {result = {result + join.cdr.arg}}
-              {result = {result + (cons car.seq (join:cons cdr.seq cdr.arg))}}))))
-      {args = cdr.args})
-    result))
+(def pair (x (o f list))
+"Splits the elements of list 'x' into buckets of two, optionally applying function 'f' to them."
+  (if (no x)
+        nil
+      (no cdr.x)
+        (list (list car.x))
+      (cons (f car.x cadr.x)
+            (pair cddr.x f))))
 
 (def assoc (key al)
-  (if atom.al
+"Finds a (key value) pair in an association list 'al' of such pairs."
+  (if (no acons.al)
         nil
       {acons.car.al and {caar.al is key}}
         car.al
       (assoc key cdr.al)))
 
 (def alref (al key)
+"Returns the value of 'key' in an association list 'al' of (key value) pairs."
   (cadr:assoc key al))
 
 (mac with (decls . body)
-  `((fn ,(map1 car pair.decls)
-     ,@body)
-    ,@(map1 cadr pair.decls)))
+  ((fn (pairs)
+     `((fn ,(map1 car pairs) ,@body)
+        ,@(map1 cadr pairs)))
+    pair.decls))
 
 (mac let (var val . body)
   `(with (,var ,val) ,@body))
@@ -234,7 +262,7 @@
 
 (mac w/uniq (names . body)
   (if {names isa cons}
-    `(with ,(apply + nil (map [list _ '(uniq)] names))
+    `(with ,(apply + (map1 [list _ '(uniq)] names))
        ,@body)
     `(let ,names (uniq) ,@body)))
 
@@ -502,10 +530,12 @@ Matches 'expr' to the first satisfying 'test' and runs the corresponding 'then' 
 
 (def adjoin (x xs)
   (if (some x xs)
-    xs
-    (cons x xs)))
+        xs
+      (cons x xs)))
 
-{copy = [if atom._
-	    _
-	    (cons copy.car._
-		  copy.cdr._)]}
+(def copy (x)
+"Creates a deep copy of 'x'."
+  (if atom.x
+        x
+      (cons (copy car.x)
+            (copy cdr.x))))

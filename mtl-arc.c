@@ -876,9 +876,13 @@ atom builtin_help(atom args) {
 		if (help(place) == NULL) return nil;
 		return new_string(help(place));
 	}
-	if (afn(place) || amac(place))
+	if (afn(place) || amac(place)) {
+		printf("arguments: ");
+		write_expr(stdout, cadr(place));
+		puts("");
 		if (astring(car(cddr(place))))
 			return car(cddr(place));
+	}
 	return nil;
 }
 
