@@ -2,6 +2,10 @@ MTL-Arc
 =======
 A new implementation of the Arc language
 
+Note: A major structure change is about to happen! 
+I've been looking into virtual machines and garbage collection. 
+I'm beggining to implement both.
+
 This is a major work in progress and will change quite often. 
 There is currently no garbage collection; I'm experimenting with options. 
 My development platform is Android with C4droid, with small amounts of testing done on Debian and OS X. 
