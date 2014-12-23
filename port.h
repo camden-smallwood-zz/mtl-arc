@@ -12,25 +12,38 @@
 
 #include "mtl-arc.h"
 
-typedef struct atom atom_t;
-
 typedef struct {
 	enum {
 		PORT_FILE,
 		PORT_STRING,
 		PORT_SOCKET
 	} type;
+	enum {
+		PORT_CLOSED,
+		PORT_OPEN
+	} state;
 	int input  : 1; // Does the port support input?
 	int output : 1; // Does the port support output?
 	union {
-		FILE *file;
-		char *string;
-		void *socket; // TODO: socket type
+		int fd; // files and sockets
+		struct { // strings and other abstract io types
+			long size, pos;
+			char *data;
+		};
 	};
 } port_t;
 
+#define port_type(port) ((port)->type)
+#define port_state(port) ((port)->state)
+#define is_input_port(port) ((port)->input)
+#define is_output_port(port) ((port)->output)
+#define port_fd(port) ((port)->fd)
+#define port_size(port) ((port)->size)
+#define port_pos(port) ((port)->pos)
+#define port_data(port) ((port)->data)
+
 // Input functions
-unsigned char port_readb(port_t *port);
+int port_readb(port_t *port);
 int port_readc(port_t *port);
 int port_peekc(port_t *port);
 atom_t *port_sread(port_t *port);
@@ -38,7 +51,7 @@ atom_t *port_sread(port_t *port);
 // Output functions
 void port_disp(port_t *port, atom_t *arg);
 void port_write(port_t *port, atom_t *arg);
-void port_writeb(port_t *port, const unsigned char arg);
+void port_writeb(port_t *port, const int arg);
 void port_writec(port_t *port, const int arg);
 
 typedef enum {
