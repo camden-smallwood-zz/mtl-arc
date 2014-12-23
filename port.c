@@ -13,7 +13,7 @@
 int port_readb(port_t *port) {
 	unsigned char result;
 	
-	if (port_state(port) != PORT_OPEN)
+	if (!is_input_port(port) || port_state(port) != PORT_OPEN)
 		return EOF;
 
 	switch (port_type(port)) {
@@ -21,7 +21,7 @@ int port_readb(port_t *port) {
 		case PORT_SOCKET:
 			read(port_fd(port), &result, sizeof(result));
 			break;
-		default:
+		default: // strings and other abstract io types
 			if (port_pos(port) >= port_size(port))
 				return EOF;
 			result = port_data(port)[port_pos(port)];
@@ -35,7 +35,7 @@ int port_readb(port_t *port) {
 int port_readc(port_t *port) {
 	char result;
 	
-	if (port_state(port) != PORT_OPEN)
+	if (!is_input_port(port) || port_state(port) != PORT_OPEN)
 		return EOF;
 
 	switch (port_type(port)) {
@@ -43,7 +43,7 @@ int port_readc(port_t *port) {
 		case PORT_SOCKET:
 			read(port_fd(port), &result, sizeof(result));
 			break;
-		default:
+		default: // strings and other abstract io types
 			if (port_pos(port) >= port_size(port))
 				return EOF;
 			result = port_data(port)[port_pos(port)];
@@ -58,7 +58,7 @@ int port_peekc(port_t *port) {
 	char result;
 	FILE *file;
 	
-	if (port_state(port) != PORT_OPEN)
+	if (!is_input_port(port) || port_state(port) != PORT_OPEN)
 		return EOF;
 	
 	switch (port_type(port)) {
@@ -68,7 +68,7 @@ int port_peekc(port_t *port) {
 			result = fgetc(file);
 			ungetc(result, file);
 			break;
-		default:
+		default: // strings and other abstract io types
 			if (port_pos(port) >= port_size(port))
 				return EOF;
 			result = port_data(port)[port_pos(port) + 1];
