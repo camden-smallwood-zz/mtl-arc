@@ -54,6 +54,8 @@ void port_write(port_t *port, atom_t *arg);
 void port_writeb(port_t *port, const int arg);
 void port_writec(port_t *port, const int arg);
 
+void port_seek(port_t *port, const long offset, const int whence);
+
 typedef enum {
 	FORMAT_BINARY,
 	FORMAT_TEXT
