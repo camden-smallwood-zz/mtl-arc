@@ -10,61 +10,53 @@
 #ifndef MTL_ARC_PORT_H
 #define MTL_ARC_PORT_H
 
-#include "mtl-arc.h"
+#include <fcntl.h>
+#include <stdio.h>
+
+typedef enum {
+	PORT_STREAM,
+	PORT_STRING,
+	PORT_SOCKET
+} port_type_t;
+
+typedef enum {
+	PORT_CLOSED,
+	PORT_OPEN
+} port_state_t;
 
 typedef struct {
-	enum {
-		PORT_FILE,
-		PORT_STRING,
-		PORT_SOCKET
-	} type;
-	enum {
-		PORT_CLOSED,
-		PORT_OPEN
-	} state;
-	int input  : 1; // Does the port support input?
-	int output : 1; // Does the port support output?
+	port_type_t type;
+	port_state_t state;
+	int input  : 1;
+	int output : 1;
 	union {
-		int fd; // files and sockets
-		struct { // strings and other abstract io types
-			long size, pos;
-			char *data;
+		int fd;
+		struct {
+			unsigned long size, position;
+			union {
+				char *string;
+				unsigned char *bytes;
+			};
 		};
 	};
 } port_t;
 
-#define port_type(port) ((port)->type)
-#define port_state(port) ((port)->state)
-#define is_input_port(port) ((port)->input)
-#define is_output_port(port) ((port)->output)
-#define port_fd(port) ((port)->fd)
-#define port_size(port) ((port)->size)
-#define port_pos(port) ((port)->pos)
-#define port_data(port) ((port)->data)
+port_t *new_port(const port_type_t type);
+port_t *stream_port(const int fd, const int input, const int output);
+port_t *string_port(const char *string, const int input, const int output);
+port_t *stdin_port();
+port_t *stdout_port();
+port_t *stderr_port();
+port_t *infile_port(const char *path);
+port_t *outfile_port(const char *path);
+port_t *instring_port(const char *string);
+port_t *outstring_port();
 
-// Input functions
-int port_readb(port_t *port);
+char *port_inside(port_t *port);
+void port_seek(port_t *port, long offset, int whence);
 int port_readc(port_t *port);
-int port_peekc(port_t *port);
-atom_t *port_sread(port_t *port);
-
-// Output functions
-void port_disp(port_t *port, atom_t *arg);
-void port_write(port_t *port, atom_t *arg);
-void port_writeb(port_t *port, const int arg);
-void port_writec(port_t *port, const int arg);
-
-void port_seek(port_t *port, const long offset, const int whence);
-
-typedef enum {
-	FORMAT_BINARY,
-	FORMAT_TEXT
-} port_format_t;
-
-atom_t *port_infile(const char *path, port_format_t fmt);
-atom_t *port_outfile(const char *path, port_format_t fmt);
-
-atom_t *port_instring(char *string);
-atom_t *port_outstring();
+int port_readb(port_t *port);
+void port_writec(port_t *port, const char c);
+void port_writeb(port_t *port, const unsigned char b);
 
 #endif /* MTL_ARC_PORT_H */
