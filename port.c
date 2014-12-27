@@ -54,6 +54,14 @@ port_t *stderr_port() {
 	return result;
 }
 
+port_t *infile_port(const char *path) {
+	return stream_port(fileno(fopen(path, "r")), 1, 0);
+}
+
+port_t *outfile_port(const char *path) {
+	return stream_port(fileno(fopen(path, "w")), 0, 1);
+}
+
 port_t *instring_port(const char *string) {
 	return string_port(string, 1, 0);
 }
