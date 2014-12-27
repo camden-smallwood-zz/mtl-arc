@@ -21,14 +21,13 @@ typedef enum {
 
 typedef enum {
 	PORT_CLOSED,
-	PORT_OPEN
+	PORT_INPUT,
+	PORT_OUTPUT
 } port_state_t;
 
 typedef struct {
 	port_type_t type;
 	port_state_t state;
-	int input  : 1;
-	int output : 1;
 	union {
 		int fd;
 		struct {
@@ -42,8 +41,9 @@ typedef struct {
 } port_t;
 
 port_t *new_port(const port_type_t type);
-port_t *stream_port(const int fd, const int input, const int output);
-port_t *string_port(const char *string, const int input, const int output);
+port_t *stream_port(const int fd);
+port_t *string_port(const char *string);
+port_t *buffer_port(const unsigned char *bytes);
 port_t *stdin_port();
 port_t *stdout_port();
 port_t *stderr_port();
