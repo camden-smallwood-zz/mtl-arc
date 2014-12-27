@@ -10,9 +10,6 @@
 #ifndef MTL_ARC_PORT_H
 #define MTL_ARC_PORT_H
 
-#include <fcntl.h>
-#include <stdio.h>
-
 typedef enum {
 	PORT_STREAM,
 	PORT_STRING,
