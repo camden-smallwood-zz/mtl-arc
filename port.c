@@ -13,23 +13,17 @@ port_t *new_port(const port_type_t type) {
 	port_t *result = malloc(sizeof(port_t));
 	result->type = type;
 	result->state = PORT_CLOSED;
-	result->input = result->output = 0;
 	return result;
 }
 
-port_t *stream_port(const int fd, const int input, const int output) {
+port_t *stream_port(const int fd) {
 	port_t *result = new_port(PORT_STREAM);
-	result->input = input ? 1 : 0;
-	result->output = output ? 1 : 0;
 	result->fd = fd;
 	return result;
 }
 
-port_t *string_port(const char *string, const int input, const int output) {
+port_t *string_port(const char *string) {
 	port_t *result = new_port(PORT_STRING);
-	result->input = input ? 1 : 0;
-	result->output = output ? 1 : 0;
-	result->state = PORT_OPEN;
 	result->size = strlen(string) - 1;
 	result->position = 0;
 	result->string = strdup(string);
@@ -37,37 +31,45 @@ port_t *string_port(const char *string, const int input, const int output) {
 }
 
 port_t *stdin_port() {
-	port_t *result = stream_port(fileno(stdin), 1, 1);
-	result->state = PORT_OPEN;
+	port_t *result = stream_port(fileno(stdin));
+	result->state = PORT_INPUT;
 	return result;
 }
 
 port_t *stdout_port() {
-	port_t *result = stream_port(fileno(stdout), 1, 1);
-	result->state = PORT_OPEN;
+	port_t *result = stream_port(fileno(stdout));
+	result->state = PORT_OUTPUT;
 	return result;
 }
 
 port_t *stderr_port() {
-	port_t *result = stream_port(fileno(stderr), 1, 1);
-	result->state = PORT_OPEN;
+	port_t *result = stream_port(fileno(stderr));
+	result->state = PORT_OUTPUT;
 	return result;
 }
 
 port_t *infile_port(const char *path) {
-	return stream_port(fileno(fopen(path, "r")), 1, 0);
+	port_t *result = stream_port(fileno(fopen(path, "r")));
+	result->state = PORT_INPUT;
+	return result;
 }
 
 port_t *outfile_port(const char *path) {
-	return stream_port(fileno(fopen(path, "w")), 0, 1);
+	port_t *result = stream_port(fileno(fopen(path, "w")));
+	result->state = PORT_OUTPUT;
+	return result;
 }
 
 port_t *instring_port(const char *string) {
-	return string_port(string, 1, 0);
+	port_t *result = string_port(string);
+	result->state = PORT_INPUT;
+	return result;
 }
 
 port_t *outstring_port() {
-	return string_port("", 0, 1);
+	port_t *result = string_port("");
+	result->state = PORT_OUTPUT;
+	return result;
 }
 
 char *port_inside(port_t *port) {
@@ -77,7 +79,7 @@ char *port_inside(port_t *port) {
 }
 
 void port_seek(port_t *port, long offset, int whence) {
-	if (port->state != PORT_OPEN)
+	if (port->state == PORT_CLOSED)
 		return;
 	switch (port->type) {
 		case PORT_STREAM:
@@ -108,7 +110,7 @@ void port_seek(port_t *port, long offset, int whence) {
 
 int port_readc(port_t *port) {
 	char result;
-	if (!port->input || port->state != PORT_OPEN)
+	if (port->state != PORT_INPUT)
 		return EOF;
 	switch (port->type) {
 		case PORT_STREAM:
@@ -125,7 +127,7 @@ int port_readc(port_t *port) {
 
 int port_readb(port_t *port) {
 	unsigned char result;
-	if (!port->input || port->state != PORT_OPEN)
+	if (port->state != PORT_INPUT)
 		return EOF;
 	switch (port->type) {
 		case PORT_STREAM:
@@ -141,7 +143,7 @@ int port_readb(port_t *port) {
 }
 
 void port_writec(port_t *port, const char c) {
-	if (!port->output || port->state != PORT_OPEN)
+	if (port->state != PORT_OUTPUT)
 		return;
 	switch (port->type) {
 		case PORT_STREAM:
@@ -156,7 +158,7 @@ void port_writec(port_t *port, const char c) {
 }
 
 void port_writeb(port_t *port, const unsigned char b) {
-	if (!port->output || port->state != PORT_OPEN)
+	if (port->state != PORT_OUTPUT)
 		return;
 	switch (port->type) {
 		case PORT_STREAM:
