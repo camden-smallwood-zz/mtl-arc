@@ -7,6 +7,8 @@
 //   Port system - I/O to files, strings and sockets
 //==============================================================
 
+#include <fcntl.h>
+#include <stdio.h>
 #include "port.h"
 
 port_t *new_port(const port_type_t type) {
