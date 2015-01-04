@@ -13,7 +13,6 @@
 typedef enum {
 	PORT_STREAM,
 	PORT_STRING,
-	PORT_SOCKET
 } port_type_t;
 
 typedef enum {
