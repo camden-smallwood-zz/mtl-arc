@@ -1283,7 +1283,7 @@ atom builtin_infile(atom args) {
 atom builtin_instring(atom args) {
 	if (no(args) || !astring(car(args)))
 		return err("invalid arguments supplied to 'instring'", args);
-	return new_input(fmemopen(stringval(car(args)), strlen(stringval(car(args))), "r"));
+	return nil; //new_input(fmemopen(stringval(car(args)), strlen(stringval(car(args))), "r"));
 }
 
 atom builtin_outfile(atom args) {
@@ -1296,10 +1296,10 @@ atom builtin_outfile(atom args) {
 atom builtin_outstring(atom args) {
 	if (!no(args))
 		return err("invalid arguments supplied to 'outstring'", args);
-	atom result = make(type_output);
-	outbuf(result) = calloc(0, 1024);
-	stream(result) = fmemopen(outbuf(result), 1024, "a");
-	return result;
+	//atom result = make(type_output);
+	//outbuf(result) = calloc(0, 1024);
+	//stream(result) = fmemopen(outbuf(result), 1024, "a");
+	return nil;
 }
 
 atom builtin_inside(atom args) {
